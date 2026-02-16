@@ -1,0 +1,61 @@
+export default {
+  expo: {
+    name: "TimeItV2",
+    slug: "TimeItV2",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/images/icon.png",
+    scheme: "timeitv2",
+    userInterfaceStyle: "automatic",
+
+    android: {
+      adaptiveIcon: {
+        backgroundColor: "#E6F4FE",
+        foregroundImage: "./assets/images/android-icon-foreground.png",
+        backgroundImage: "./assets/images/android-icon-background.png",
+        monochromeImage: "./assets/images/android-icon-monochrome.png",
+      },
+      edgeToEdgeEnabled: true,
+      predictiveBackGestureEnabled: false,
+      package: "com.agentperry.TimeItV2",
+    },
+
+    ios: {
+      supportsTablet: true,
+    },
+
+    web: {
+      output: "static",
+      favicon: "./assets/images/favicon.png",
+    },
+
+    plugins: [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          image: "./assets/images/splash-icon.png",
+          imageWidth: 200,
+          resizeMode: "contain",
+          backgroundColor: "#ffffff",
+          dark: {
+            backgroundColor: "#000000",
+          },
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/android-icon-foreground.png",
+          color: "#ffffff",
+          sounds: ["./assets/sounds/glass_fixed.wav"],
+        },
+      ],
+    ],
+
+    experiments: {
+      typedRoutes: true,
+      reactCompiler: true,
+    },
+  },
+};

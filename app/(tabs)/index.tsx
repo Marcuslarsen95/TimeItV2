@@ -1,98 +1,231 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { View, StyleSheet, AppState } from "react-native";
+import {
+  Surface,
+  Text,
+  Button,
+  Switch,
+  useTheme,
+  Snackbar,
+} from "react-native-paper";
+import { layout } from "../../styles/layout";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import DurationPicker from "../../components/DurationPicker";
+import React, { useState } from "react";
+import { formatDateTimer } from "../../utils/HelperFunctions";
+import { useAudioPlayer } from "expo-audio";
+import HandleNotification from "@/utils/HandleNotification";
+import * as Notifications from "expo-notifications";
 
-export default function HomeScreen() {
+export default function Index() {
+  const [appState, setAppState] = useState(AppState.currentState);
+  const [inputTime, setInputtime] = useState(10000);
+  const [timer, setTimer] = useState(0);
+  const [error, setError] = useState("");
+  const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedRemaining, setPausedRemaining] = useState(0); // Stores time left
+  const [displayTimer, setDisplayTimer] = useState(true);
+  const theme = useTheme();
+  const timerRef = React.useRef<ReturnType<typeof setInterval> | undefined>(
+    undefined,
+  );
+  const audioSource = require("../../assets/sounds/beep.mp3");
+  const player = useAudioPlayer(audioSource);
+  const notifIdRef = React.useRef<string>("null");
+  const step = 7;
+
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current); // clears interval
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      setAppState(next);
+    });
+    return () => sub.remove();
+  }, []);
+
+  const startTimer = async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    if (inputTime > 0) {
+      const endTime = Date.now() + inputTime;
+      setTimer(inputTime);
+      const notificationId = await HandleNotification(
+        "Time out",
+        "Time has run out!",
+        inputTime / 1000,
+        "notif_3",
+        "beep.mp3",
+      );
+      notifIdRef.current = notificationId;
+
+      timerRef.current = setInterval(async () => {
+        const remaining = endTime - Date.now();
+
+        if (remaining <= 500) {
+          await Notifications.cancelScheduledNotificationAsync(
+            notifIdRef.current,
+          );
+        }
+        if (remaining <= 0) {
+          if (appState === "active") {
+            player.play();
+          }
+          setTimer(0);
+          if (timerRef.current) clearInterval(timerRef.current);
+          timerRef.current = undefined;
+
+          stopTimer();
+        } else {
+          setTimer(remaining);
+        }
+      }, step);
+    }
+  };
+
+  const togglePause = async () => {
+    // PAUSING
+    if (!isPaused) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setPausedRemaining(timer);
+      setIsPaused(true);
+      await Notifications.cancelScheduledNotificationAsync(notifIdRef.current);
+    } else {
+      // RESUMING
+      setIsPaused(false);
+      const newEndTime = Date.now() + pausedRemaining;
+
+      if (newEndTime - Date.now() > 0) {
+        const notificationId = await HandleNotification(
+          "Time out",
+          "Time has run out!",
+          pausedRemaining / 1000,
+          "notif_3",
+          "beep.mp3",
+        );
+        notifIdRef.current = notificationId;
+      }
+      timerRef.current = setInterval(async () => {
+        const remaining = newEndTime - Date.now();
+
+        if (remaining <= 500) {
+          await Notifications.cancelScheduledNotificationAsync(
+            notifIdRef.current,
+          );
+        }
+
+        if (remaining <= 0) {
+          if (appState === "active") player.play();
+          setTimer(0);
+          clearInterval(timerRef.current);
+        } else {
+          setTimer(remaining);
+        }
+      }, step);
+    }
+  };
+
+  const stopTimer = async () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = undefined;
+    }
+
+    setTimer(0);
+    setIsPaused(false); // Reset pause state
+    setPausedRemaining(0); // explicitly clear the pause
+    await Notifications.cancelScheduledNotificationAsync(notifIdRef.current);
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <View
+      style={[
+        layout.outerContainer,
+        { backgroundColor: theme.colors.background },
+      ]}
+    >
+      <Surface
+        style={[
+          layout.container,
+          {
+            borderWidth: 1,
+            borderColor: theme.colors.outlineVariant,
+          },
+        ]}
+        elevation={1}
+      >
+        <Surface
+          elevation={0}
+          style={[
+            layout.timerSurface,
+            {
+              backgroundColor: theme.colors.surfaceVariant, // Let the outer container show through
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant, // Subtle green-tinted border
+              borderRadius: 12,
+            },
+          ]}
+        >
+          <Text variant="headlineLarge">{formatDateTimer(timer)}</Text>
+        </Surface>
+        <DurationPicker
+          label="Set timer"
+          onTimeChange={(val) => setInputtime(val)}
+          initialValue={inputTime} // Pass the default state here
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
-
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </Surface>
+      <View style={layout.footer}>
+        {!timer ? (
+          <View style={layout.buttonRow}>
+            <Button
+              icon="timer-outline"
+              mode="contained"
+              onPress={startTimer}
+              style={layout.primaryButton}
+              labelStyle={{ fontSize: 20 }}
+            >
+              Start timer!
+            </Button>
+          </View>
+        ) : (
+          <View style={layout.buttonRow}>
+            <Button
+              icon={isPaused ? "play" : "pause-outline"}
+              mode="contained"
+              onPress={togglePause}
+              style={[layout.marginBottom, layout.flexButton]}
+            >
+              {isPaused ? "Resume" : "Pause"}
+            </Button>
+            <Button
+              icon="stop-outline"
+              mode="contained"
+              onPress={stopTimer}
+              style={[
+                layout.marginBottom,
+                layout.flexButton,
+                { backgroundColor: theme.colors.error },
+              ]}
+            >
+              Stop timer
+            </Button>
+          </View>
+        )}
+      </View>
+      <Snackbar
+        visible={isSnackbarVisible}
+        onDismiss={() => setIsSnackbarVisible(false)}
+        style={{ backgroundColor: theme.colors.error }}
+        theme={{ colors: { accent: theme.colors.onError } }}
+        wrapperStyle={{ bottom: -50 }}
+      >
+        <Text style={{ color: theme.colors.onError }}>{error}</Text>
+      </Snackbar>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+const styles = StyleSheet.create({});
