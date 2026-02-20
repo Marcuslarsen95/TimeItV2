@@ -1,4 +1,9 @@
-import { View, ScrollView } from "react-native";
+import {
+  View,
+  ScrollView,
+  NativeModules,
+  DeviceEventEmitter,
+} from "react-native";
 import {
   Text,
   Button,
@@ -6,16 +11,11 @@ import {
   Snackbar,
   IconButton,
 } from "react-native-paper";
-import {
-  useSharedValue,
-  withTiming,
-  withRepeat,
-} from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 
 import { layout } from "../../styles/layout";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 import React, { useState } from "react";
-import { useAudioPlayer } from "expo-audio";
 import NumberWithDropdown from "@/components/NumbersWithDropdown";
 import CircularProgress from "@/components/CircularProgress";
 
@@ -38,15 +38,16 @@ export default function Interval() {
   const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
   const progress = useSharedValue(0);
   const pulse = useSharedValue(1); // <-- add this
+  const { IntervalServiceModule } = NativeModules;
 
   const [intervals, setIntervals] = useState<Interval[]>([
     {
       id: 1,
-      durationSecs: 30,
+      durationSecs: 10,
       name: "Active",
       unit: "Seconds" as Unit,
       sound: "beep.mp3",
-      pingPoint: 30000,
+      pingPoint: 10000,
     },
     {
       id: 2,
@@ -75,134 +76,76 @@ export default function Interval() {
     undefined,
   );
 
-  const multiplier: Record<Unit, number> = {
-    Seconds: 1,
-    Minutes: 60,
-    Hours: 3600,
-  };
+  React.useEffect(() => {
+    const subUpdate = DeviceEventEmitter.addListener(
+      "IntervalUpdate",
+      (data) => {
+        const { intervalName, remainingMs } = data;
 
-  // interval end sound
-  const beepSource = require("../../assets/sounds/beep.mp3");
-  const beepPlayer = useAudioPlayer(beepSource);
+        setTimer(remainingMs);
+        setStrokeColor(intervalColors[intervalName]);
 
-  // countdown ping sound
-  const countdownBeep = require("../../assets/sounds/countdown_beep_v3.mp3");
-  const cdping = useAudioPlayer(countdownBeep);
+        // Update progress based on the interval that matches the name
+        const idx = intervalsRef.current.findIndex(
+          (i) => i.name === intervalName,
+        );
+        if (idx !== -1) {
+          const duration = intervalsRef.current[idx].durationSecs * 1000;
+          progress.value = remainingMs / duration;
+          counterRef.current = idx; // <-- keep JS in sync with native
+        }
+      },
+    );
 
-  const playBeep = () => {
-    if (beepPlayer) {
-      beepPlayer.seekTo(0);
-      beepPlayer.play();
-    }
-  };
+    const subPause = DeviceEventEmitter.addListener("IntervalPaused", () => {
+      setIsPaused(true);
+    });
 
-  const playPing = () => {
-    if (cdping) {
-      cdping.seekTo(0);
-      cdping.play();
-    }
-  };
+    const subResume = DeviceEventEmitter.addListener("IntervalResumed", () => {
+      setIsPaused(false);
+    });
+
+    const subStop = DeviceEventEmitter.addListener("IntervalStopped", () => {
+      setIsPaused(false);
+      setTimer(0);
+      progress.value = 0;
+      counterRef.current = 0;
+    });
+
+    return () => {
+      subUpdate.remove();
+      subPause.remove();
+      subResume.remove();
+      subStop.remove();
+    };
+  }, []);
 
   const counterRef = React.useRef(0);
-  const intervalStartRef = React.useRef(0);
-  const hasPlayedRef = React.useRef(false);
 
   const startInterval = () => {
-    clearInterval(timerRef.current);
+    setIsPaused(false);
+    setTimer(0);
+    progress.value = 0;
     counterRef.current = 0;
-    const first = intervalsRef.current[0];
+    setStrokeColor(intervalColors.Active);
 
-    intervalStartRef.current = Date.now();
-    setStrokeColor(intervalColors[first.name]);
-
-    progress.value = 1;
-    // full circle at start
-    setTimer(first.durationSecs * multiplier[first.unit] * 1000);
-
-    pulse.value = withRepeat(withTiming(1.4, { duration: 800 }), -1, true);
-
-    timerRef.current = setInterval(tick, 50);
+    IntervalServiceModule.startService();
+    IntervalServiceModule.startSequence(
+      JSON.stringify(
+        intervals.map((i) => ({
+          name: i.name,
+          durationMs: i.durationSecs * 1000,
+        })),
+      ),
+    );
   };
 
   const togglePause = () => {
-    if (!isPaused) {
-      clearInterval(timerRef.current);
-      setIsPaused(true);
-      pulse.value = withTiming(1, { duration: 300 });
-    } else {
-      const current = intervalsRef.current[counterRef.current];
-      const currentDuration =
-        current.durationSecs * multiplier[current.unit] * 1000;
-
-      intervalStartRef.current = Date.now() - (currentDuration - timer);
-      timerRef.current = setInterval(tick, 50);
-      setIsPaused(false);
-      pulse.value = withRepeat(withTiming(1.4, { duration: 800 }), -1, true);
-    }
-  };
-
-  const tick = () => {
-    const now = Date.now();
-    const current = intervalsRef.current[counterRef.current];
-    // Control pulse based on interval type
-    // Pulse only when timer is running
-
-    const currentDuration =
-      current.durationSecs * multiplier[current.unit] * 1000;
-
-    const localTime = now - intervalStartRef.current;
-    const remaining = currentDuration - localTime;
-    const intervalFinished = remaining <= 0;
-
-    setTimer(Math.max(remaining, 0));
-
-    // progress should count DOWN
-    progress.value = remaining / currentDuration;
-
-    if (remaining < 50 && !hasPlayedRef.current) {
-      playBeep();
-      hasPlayedRef.current = true;
-    }
-
-    const cdPingTimes = [3000, 2000, 1000]; // countdown timer ping times
-
-    cdPingTimes.forEach((t) => {
-      if (remaining < t && remaining > t - 60) {
-        playPing();
-      }
-    });
-
-    if (intervalFinished) {
-      hasPlayedRef.current = false; // Reset for next interval
-      counterRef.current += 1;
-
-      if (counterRef.current >= intervalsRef.current.length) {
-        const first = intervalsRef.current[0];
-        counterRef.current = 0;
-        intervalStartRef.current = Date.now();
-        setStrokeColor(intervalColors[first.name]);
-        progress.value = 1;
-        // full circle for new interval
-        setTimer(first.durationSecs * multiplier[first.unit] * 1000);
-        return;
-      }
-
-      const next = intervalsRef.current[counterRef.current];
-      intervalStartRef.current = now;
-      setStrokeColor(intervalColors[next.name]);
-      progress.value = 1;
-    }
+    IntervalServiceModule.toggle();
   };
 
   const stopTimer = async () => {
-    setTimer(0);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = undefined;
-      progress.value = 0;
-      pulse.value = withTiming(1, { duration: 300 });
-    }
-    setIsPaused(false);
+    IntervalServiceModule.stop();
   };
 
   const removeLastInterval = () => setIntervals((prev) => prev.slice(0, -1));

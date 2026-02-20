@@ -9,23 +9,18 @@ import Svg, {
   Filter,
   FeGaussianBlur,
 } from "react-native-svg";
-import Animated, {
-  useAnimatedProps,
-  withRepeat,
-} from "react-native-reanimated";
+import Animated, { useAnimatedProps } from "react-native-reanimated";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function CircularProgress({
   progress, // shared value (0 → 1)
   radius,
-  pulse,
   strokeWidth,
   gradientColors = [],
   text,
 }: any) {
   const theme = useTheme();
-  const bg = theme.colors.surfaceVariant;
 
   const glowPadding = 40;
 
@@ -40,11 +35,6 @@ export default function CircularProgress({
 
   const animatedProgressProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference - progress.value * circumference,
-  }));
-
-  const animatedGlowProps = useAnimatedProps(() => ({
-    strokeWidth: strokeWidth * 1.2 * pulse.value,
-    opacity: 0.25 * pulse.value,
   }));
 
   return (
@@ -73,18 +63,16 @@ export default function CircularProgress({
           </Filter>
         </Defs>
 
-        {/* Background ring */}
-        <AnimatedCircle
-          animatedProps={animatedGlowProps}
+        {/* Blurry background circle */}
+        <Circle
           cx={center}
           cy={center}
           r={radius}
-          stroke="url(#glow)"
+          stroke={gradientColors[0]}
+          strokeWidth={strokeWidth * 0.8}
           fill="none"
           filter="#glowBlur"
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${center}, ${center}`}
+          opacity={0.25}
         />
 
         {/* Sharp progress ring */}
