@@ -17,7 +17,7 @@ import { layout } from "../../styles/layout";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 import React, { useState } from "react";
 import NumberWithDropdown from "@/components/NumbersWithDropdown";
-import CircularProgress from "@/components/CircularProgress";
+import CircularTimer from "@/components/CircularTimer";
 
 export default function Interval() {
   const theme = useTheme();
@@ -37,7 +37,6 @@ export default function Interval() {
   const [isPaused, setIsPaused] = useState(false);
   const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
   const progress = useSharedValue(0);
-  const pulse = useSharedValue(1); // <-- add this
   const { IntervalServiceModule } = NativeModules;
 
   const [intervals, setIntervals] = useState<Interval[]>([
@@ -108,7 +107,6 @@ export default function Interval() {
     const subStop = DeviceEventEmitter.addListener("IntervalStopped", () => {
       setIsPaused(false);
       setTimer(0);
-      progress.value = 0;
       counterRef.current = 0;
     });
 
@@ -125,11 +123,9 @@ export default function Interval() {
   const startInterval = () => {
     setIsPaused(false);
     setTimer(0);
-    progress.value = 0;
     counterRef.current = 0;
     setStrokeColor(intervalColors.Active);
 
-    IntervalServiceModule.startService();
     IntervalServiceModule.startSequence(
       JSON.stringify(
         intervals.map((i) => ({
@@ -170,11 +166,9 @@ export default function Interval() {
         { backgroundColor: theme.colors.background },
       ]}
     >
-      <CircularProgress
-        progress={progress}
+      <CircularTimer
         radius={100}
-        pulse={pulse}
-        strokeWidth={16}
+        strokeWidth={10}
         baseStrokeColor={theme.colors.onSurface}
         strokeColor={strokeColor}
         gradientColors={[theme.colors.primary, theme.colors.secondary]}

@@ -12,7 +12,7 @@ import { layout } from "../../styles/layout";
 import DurationPicker from "../../components/DurationPicker";
 import React, { useState } from "react";
 import { formatDateTimer } from "../../utils/HelperFunctions";
-import { useAudioPlayer } from "expo-audio";
+// import { useAudioPlayer } from "expo-audio";
 import HandleNotification from "@/utils/HandleNotification";
 import * as Notifications from "expo-notifications";
 
@@ -30,7 +30,7 @@ export default function Index() {
     undefined,
   );
   const audioSource = require("../../assets/sounds/beep.mp3");
-  const player = useAudioPlayer(audioSource);
+  // const player = useAudioPlayer(audioSource);
   const notifIdRef = React.useRef<string>("null");
   const step = 7;
 
@@ -72,7 +72,7 @@ export default function Index() {
         }
         if (remaining <= 0) {
           if (appState === "active") {
-            player.play();
+            // player.play();
           }
           setTimer(0);
           if (timerRef.current) clearInterval(timerRef.current);
@@ -118,7 +118,7 @@ export default function Index() {
         }
 
         if (remaining <= 0) {
-          if (appState === "active") player.play();
+          // if (appState === "active") player.play();
           setTimer(0);
           clearInterval(timerRef.current);
         } else {

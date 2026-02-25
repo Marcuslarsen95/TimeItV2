@@ -34,21 +34,13 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/splash-icon.png",
+          image: "./assets/images/icon.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
           dark: {
             backgroundColor: "#000000",
           },
-        },
-      ],
-      [
-        "expo-notifications",
-        {
-          icon: "./assets/images/android-icon-foreground.png",
-          color: "#ffffff",
-          sounds: ["./assets/sounds/glass_fixed.wav"],
         },
       ],
     ],
