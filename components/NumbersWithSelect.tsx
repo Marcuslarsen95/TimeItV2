@@ -9,7 +9,7 @@ interface Props {
   initialValue: string;
 }
 
-export default function NumberWithDropdown({
+export default function NumbersWithSelect({
   label,
   onValueChange,
   onUnitChange,
@@ -17,15 +17,8 @@ export default function NumberWithDropdown({
 }: Props) {
   const theme = useTheme();
   const [value, setValue] = React.useState(initialValue);
-  const [timeDef, setTimeDef] = React.useState("Seconds");
-  const [menuVisible, setMenuVisible] = React.useState(false);
+  const [isSeconds, setIsSeconds] = React.useState(true);
   const [focused, setFocused] = React.useState(false);
-
-  const selectMenuItem = (item: string) => {
-    setTimeDef(item);
-    onUnitChange(item);
-    setMenuVisible(false);
-  };
 
   const handleChange = (text: string) => {
     setValue(text);
@@ -36,23 +29,21 @@ export default function NumberWithDropdown({
     }
   };
 
-  const openMenu = () => {
-    setMenuVisible(true);
-  };
-  const closeMenu = () => {
-    setMenuVisible(false);
+  const handleUnitChange = (toSeconds: boolean) => {
+    setIsSeconds(toSeconds);
+    onUnitChange(toSeconds ? "Seconds" : "Minutes");
   };
 
   const styles = StyleSheet.create({
     button: {
-      borderTopRightRadius: 16,
-      borderBottomRightRadius: 16,
       borderTopLeftRadius: 0,
       borderBottomLeftRadius: 0,
       borderWidth: 1,
-
       borderColor: theme.colors.outlineVariant,
       backgroundColor: theme.colors.surface,
+    },
+    selected: {
+      backgroundColor: theme.colors.surfaceDisabled,
     },
   });
 
@@ -71,7 +62,7 @@ export default function NumberWithDropdown({
           justifyContent: "center",
           borderColor: theme.colors.surfaceVariant,
           height: 50,
-          minWidth: 250,
+          minWidth: 300,
           marginVertical: 8,
         }}
       >
@@ -93,45 +84,61 @@ export default function NumberWithDropdown({
           }}
           style={{
             height: 50,
-            width: 120,
+            width: 80,
             backgroundColor: theme.colors.surfaceVariant,
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
-
-        <Menu
-          visible={menuVisible}
-          key={menuVisible ? "visible" : "hidden"}
-          onDismiss={closeMenu}
-          anchor={
-            <View style={{ width: 120, flex: 1 }}>
-              <Button
-                icon="caret-down"
-                onPress={openMenu}
-                style={[styles.button, { flex: 1, borderLeftWidth: 0 }]}
-                contentStyle={{
-                  // forces internal content to stretch
-                  height: "100%", // ensures full height
-                }}
-              >
-                {timeDef}
-              </Button>
-            </View>
-          }
-          anchorPosition="bottom"
-          contentStyle={[styles.button]}
-        >
-          <Menu.Item
-            onPress={() => selectMenuItem("Seconds")}
-            title="Seconds"
-          />
-          <Menu.Item
-            onPress={() => selectMenuItem("Minutes")}
-            title="Minutes"
-          />
-          <Menu.Item onPress={() => selectMenuItem("Hours")} title="Hours" />
-        </Menu>
+        <View style={{ width: 150, flex: 1, flexDirection: "row" }}>
+          <Button
+            onPress={() => handleUnitChange(true)}
+            mode={isSeconds ? "contained" : "outlined"}
+            icon={isSeconds ? "checkmark" : ""}
+            style={[
+              styles.button,
+              isSeconds && styles.selected,
+              {
+                flex: 1,
+                borderLeftWidth: 0,
+                borderTopRightRadius: 0,
+                borderBottomRightRadius: 0,
+                backgroundColor: isSeconds
+                  ? theme.colors.primary
+                  : theme.colors.surface,
+              },
+            ]}
+            contentStyle={{
+              height: "100%", // ensures full height
+            }}
+          >
+            Seconds
+          </Button>
+          <Button
+            onPress={() => handleUnitChange(false)}
+            mode={isSeconds ? "contained" : "outlined"}
+            icon={!isSeconds ? "checkmark" : ""}
+            style={[
+              styles.button,
+              {
+                flex: 1,
+                borderLeftWidth: 0,
+                backgroundColor: !isSeconds
+                  ? theme.colors.primary
+                  : theme.colors.surface,
+              },
+            ]}
+            contentStyle={{
+              // forces internal content to stretch
+              height: "100%", // ensures full height
+            }}
+            labelStyle={{
+              color: !isSeconds ? theme.colors.onPrimary : theme.colors.primary,
+            }}
+          >
+            Minutes
+          </Button>
+        </View>
       </View>
     </View>
   );

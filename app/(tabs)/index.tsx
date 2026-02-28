@@ -25,6 +25,7 @@ export default function Index() {
   const [isPaused, setIsPaused] = useState(false);
   const [pausedRemaining, setPausedRemaining] = useState(0); // Stores time left
   const [displayTimer, setDisplayTimer] = useState(true);
+  const { main, ms } = formatDateTimer(timer);
   const theme = useTheme();
   const timerRef = React.useRef<ReturnType<typeof setInterval> | undefined>(
     undefined,
@@ -169,7 +170,7 @@ export default function Index() {
             },
           ]}
         >
-          <Text variant="headlineLarge">{formatDateTimer(timer)}</Text>
+          <Text variant="headlineLarge">{main}</Text>
         </Surface>
         <DurationPicker
           label="Set timer"

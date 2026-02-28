@@ -14,16 +14,14 @@ export default function CircularTimer({
   radius,
   strokeWidth,
   gradientColors = [],
-  text,
+  mainTime,
+  msPart,
+  fontSize,
+  isPaused,
 }: any) {
   const theme = useTheme();
 
-  const glowPadding = 40;
-
-  const size = useMemo(
-    () => (radius + strokeWidth) * 2 + glowPadding,
-    [radius, strokeWidth],
-  );
+  const size = useMemo(() => (radius + strokeWidth) * 2, [radius, strokeWidth]);
 
   const center = size / 2;
 
@@ -54,7 +52,7 @@ export default function CircularTimer({
           cy={center}
           r={radius}
           stroke={gradientColors[0]}
-          strokeWidth={strokeWidth * 1.5}
+          strokeWidth={strokeWidth * 1.7}
           fill="none"
           filter="url(#glowBlur)"
           opacity={0.35}
@@ -68,19 +66,28 @@ export default function CircularTimer({
           stroke="url(#timerGradient)"
           strokeWidth={strokeWidth}
           fill="none"
-          opacity={0.75}
+          opacity={0.1}
         />
       </Svg>
 
       <Text
         style={{
           position: "absolute",
-          fontSize: 32,
+          fontSize: fontSize,
           fontWeight: "700",
-          color: theme.colors.onSurface,
+          color: isPaused ? gradientColors[0] : theme.colors.onSurfaceVariant,
         }}
       >
-        {text}
+        {mainTime}
+        <Text
+          style={{
+            color: isPaused ? gradientColors[0] : theme.colors.onSurfaceVariant,
+            fontSize: fontSize * 0.6,
+            opacity: 0.6,
+          }}
+        >
+          {msPart}
+        </Text>
       </Text>
     </View>
   );

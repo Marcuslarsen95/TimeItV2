@@ -1,28 +1,31 @@
-import {
-  View,
-  ScrollView,
-  NativeModules,
-  DeviceEventEmitter,
-} from "react-native";
-import {
-  Text,
-  Button,
-  useTheme,
-  Snackbar,
-  IconButton,
-} from "react-native-paper";
+import { View, NativeModules, DeviceEventEmitter } from "react-native";
+import { Button, useTheme, IconButton } from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
-
 import { layout } from "../../styles/layout";
-import { formatDateTimer } from "../../utils/HelperFunctions";
+import {
+  formatDateTimer,
+  getTimerFontSize,
+  lightenColor,
+  convertToMs,
+  getUrgencyColor,
+} from "../../utils/HelperFunctions";
 import React, { useState } from "react";
 import NumberWithDropdown from "@/components/NumbersWithDropdown";
+import NumbersWithSelect from "@/components/NumbersWithSelect";
+import ErrorSnackbar from "@/components/errorSnackBar";
 import CircularTimer from "@/components/CircularTimer";
+const INTERVAL_NAMES = ["Active", "Pause", "Transition"] as const;
 
 export default function Interval() {
   const theme = useTheme();
   type Unit = "Seconds" | "Minutes" | "Hours";
-  const intervalName = ["Active", "Pause", "Transition"];
+  type IntervalName = "Active" | "Pause" | "Transition";
+
+  interface IntervalUpdateEvent {
+    intervalName: IntervalName;
+    remainingMs: number;
+  }
+
   interface Interval {
     id: number;
     name: string;
@@ -34,11 +37,11 @@ export default function Interval() {
 
   const [timer, setTimer] = useState(0);
   const [error, setError] = useState("");
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(true);
   const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
   const progress = useSharedValue(0);
   const { IntervalServiceModule } = NativeModules;
-
+  const { main, ms } = formatDateTimer(timer);
   const [intervals, setIntervals] = useState<Interval[]>([
     {
       id: 1,
@@ -57,41 +60,28 @@ export default function Interval() {
       pingPoint: 10000,
     },
   ]);
-  const intervalsRef = React.useRef(intervals);
 
-  const intervalColors: Record<string, string> = {
-    Active: theme.colors.primary,
-    Pause: theme.colors.secondary,
-    Transition: theme.colors.tertiary,
-  };
-
-  const [strokeColor, setStrokeColor] = useState(intervalColors.Active);
-
-  React.useEffect(() => {
-    intervalsRef.current = intervals;
-  }, [intervals]);
-
-  const timerRef = React.useRef<ReturnType<typeof setInterval> | undefined>(
-    undefined,
-  );
+  const [strokeColor, setStrokeColor] = useState(theme.colors.primary);
+  const currentStrokeColor = getUrgencyColor(timer, isPaused);
 
   React.useEffect(() => {
     const subUpdate = DeviceEventEmitter.addListener(
       "IntervalUpdate",
-      (data) => {
-        const { intervalName, remainingMs } = data;
-
+      (data: IntervalUpdateEvent) => {
+        const { intervalName: name, remainingMs } = data;
         setTimer(remainingMs);
-        setStrokeColor(intervalColors[intervalName]);
 
-        // Update progress based on the interval that matches the name
-        const idx = intervalsRef.current.findIndex(
-          (i) => i.name === intervalName,
-        );
+        const idx = intervals.findIndex((i) => i.name === name);
         if (idx !== -1) {
-          const duration = intervalsRef.current[idx].durationSecs * 1000;
-          progress.value = remainingMs / duration;
-          counterRef.current = idx; // <-- keep JS in sync with native
+          const interval = intervals[idx];
+          const duration = convertToMs(interval.durationSecs, interval.unit);
+
+          // Compute progress (1 → 0)
+          const t = remainingMs / duration;
+
+          setStrokeColor(getUrgencyColor(remainingMs, isPaused));
+
+          progress.value = t;
         }
       },
     );
@@ -124,13 +114,12 @@ export default function Interval() {
     setIsPaused(false);
     setTimer(0);
     counterRef.current = 0;
-    setStrokeColor(intervalColors.Active);
 
     IntervalServiceModule.startSequence(
       JSON.stringify(
         intervals.map((i) => ({
           name: i.name,
-          durationMs: i.durationSecs * 1000,
+          durationMs: convertToMs(i.durationSecs, i.unit),
         })),
       ),
     );
@@ -141,51 +130,64 @@ export default function Interval() {
   };
 
   const stopTimer = async () => {
+    setIsPaused(true);
     IntervalServiceModule.stop();
   };
 
   const removeLastInterval = () => setIntervals((prev) => prev.slice(0, -1));
 
-  const addNewInterval = () =>
+  const addNewInterval = () => {
+    if (intervals.length > 2) return;
     setIntervals((prev) => [
       ...prev,
       {
         id: intervals.length + 1,
-        name: intervalName[intervals.length],
+        name: INTERVAL_NAMES[intervals.length],
         durationSecs: 10,
         unit: "Seconds",
         sound: "beep.mp3",
         pingPoint: 10000,
       },
     ]);
-
+  };
   return (
     <View
       style={[
         layout.outerContainer,
-        { backgroundColor: theme.colors.background },
+        {
+          backgroundColor: theme.colors.background,
+          position: "relative",
+          justifyContent: "space-between",
+        },
       ]}
     >
       <CircularTimer
-        radius={100}
+        radius={125}
         strokeWidth={10}
         baseStrokeColor={theme.colors.onSurface}
-        strokeColor={strokeColor}
-        gradientColors={[theme.colors.primary, theme.colors.secondary]}
-        text={formatDateTimer(timer)}
+        strokeColor={currentStrokeColor}
+        gradientColors={[
+          currentStrokeColor,
+          lightenColor(currentStrokeColor, 0.8),
+        ]}
+        mainTime={main}
+        msPart={ms}
+        fontSize={getTimerFontSize(timer)}
+        isPaused={isPaused}
       />
 
-      <ScrollView
-        contentContainerStyle={{
+      <View
+        style={{
           flexDirection: "column",
+          alignItems: "center",
           paddingVertical: 16,
           width: "100%",
           gap: 16,
+          position: "relative",
         }}
-        showsVerticalScrollIndicator={true}
       >
         {intervals.map((interval) => (
-          <NumberWithDropdown
+          <NumbersWithSelect
             key={interval.id}
             label={interval.name + ` interval`}
             onValueChange={(val) =>
@@ -205,6 +207,7 @@ export default function Interval() {
             initialValue={interval.durationSecs.toString()}
           />
         ))}
+
         <View
           style={[
             layout.buttonRow,
@@ -212,28 +215,39 @@ export default function Interval() {
               flexDirection: "row",
               justifyContent: "flex-end",
               width: "100%",
+              position: "absolute",
+              top: -30,
+              right: 0,
+              zIndex: 1,
             },
           ]}
         >
           <IconButton
             icon="add"
             mode="contained"
+            disabled={intervals.length > 2}
             size={24}
             onPress={addNewInterval}
           />
+
           <IconButton
             icon="remove"
             mode="contained"
+            disabled={intervals.length <= 1}
             size={24}
             onPress={removeLastInterval}
           />
         </View>
-      </ScrollView>
+      </View>
 
-      <View style={layout.footer}>
-        {!timer && !timerRef.current && <View style={layout.buttonRow}></View>}
+      <View style={{ flex: 1 }} />
 
-        {!timer && !timerRef.current ? (
+      <View
+        style={[layout.footer, { position: "absolute", zIndex: 1, bottom: 16 }]}
+      >
+        {!timer && <View style={layout.buttonRow}></View>}
+
+        {!timer ? (
           <View style={layout.buttonRow}>
             <Button
               icon="swap-horizontal-sharp"
@@ -270,16 +284,13 @@ export default function Interval() {
           </View>
         )}
       </View>
-
-      <Snackbar
+      <ErrorSnackbar
         visible={isSnackbarVisible}
+        message={error}
         onDismiss={() => setIsSnackbarVisible(false)}
-        style={{ backgroundColor: theme.colors.error }}
-        theme={{ colors: { accent: theme.colors.onError } }}
-        wrapperStyle={{ bottom: -50 }}
-      >
-        <Text style={{ color: theme.colors.onError }}>{error}</Text>
-      </Snackbar>
+        color={theme.colors.error}
+        textColor={theme.colors.onError}
+      />
     </View>
   );
 }

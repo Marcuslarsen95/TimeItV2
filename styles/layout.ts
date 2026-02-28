@@ -53,20 +53,21 @@ export const layout = StyleSheet.create({
 
   flexButton: {
     flex: 1,
-    height: 45,
+    height: 50,
     justifyContent: "center",
   },
 
   primaryButton: {
     flex: 1,
-    height: 60,
+    maxWidth: 300,
+    height: 50,
     justifyContent: "center",
     borderRadius: 15,
   },
 
   secondaryButton: {
     flex: 1,
-    height: 40,
+    height: 50,
     justifyContent: "center",
     borderRadius: 15,
   },
