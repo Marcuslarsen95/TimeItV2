@@ -1,12 +1,5 @@
-import { View, StyleSheet, AppState } from "react-native";
-import {
-  Surface,
-  Text,
-  Button,
-  Switch,
-  useTheme,
-  Snackbar,
-} from "react-native-paper";
+import { View, AppState } from "react-native";
+import { Surface, Text, Button, useTheme, Snackbar } from "react-native-paper";
 import { layout } from "../../styles/layout";
 
 import DurationPicker from "../../components/DurationPicker";
@@ -228,5 +221,3 @@ export default function Index() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({});

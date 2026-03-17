@@ -1,20 +1,13 @@
 import { View, NativeModules, DeviceEventEmitter } from "react-native";
-import { Button, useTheme, IconButton } from "react-native-paper";
+import { useTheme, Text } from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
 import { layout } from "../../styles/layout";
-import {
-  formatDateTimer,
-  getTimerFontSize,
-  lightenColor,
-  convertToMs,
-  getUrgencyColor,
-} from "../../utils/HelperFunctions";
+import { formatDateTimer, convertToMs } from "../../utils/HelperFunctions";
 import React, { useState } from "react";
-import NumberWithDropdown from "@/components/NumbersWithDropdown";
 import NumbersWithSelect from "@/components/NumbersWithSelect";
+import ActionButtonsRow from "@/components/ActionButtonsRow";
+import TimerDisplay from "@/components/TimerDisplay";
 import ErrorSnackbar from "@/components/errorSnackBar";
-import CircularTimer from "@/components/CircularTimer";
-const INTERVAL_NAMES = ["Active", "Pause", "Transition"] as const;
 
 export default function Interval() {
   const theme = useTheme();
@@ -31,44 +24,84 @@ export default function Interval() {
     name: string;
     durationSecs: number;
     unit: Unit;
-    sound: string;
-    pingPoint: number;
+    active: boolean;
   }
 
   const [timer, setTimer] = useState(0);
   const [error, setError] = useState("");
   const [isPaused, setIsPaused] = useState(true);
   const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
+  const [currentInterval, setCurrentInterval] =
+    useState<IntervalName>("Active");
   const progress = useSharedValue(0);
   const { IntervalServiceModule } = NativeModules;
-  const { main, ms } = formatDateTimer(timer);
+  const { main, ms } = formatDateTimer(timer, false);
   const [intervals, setIntervals] = useState<Interval[]>([
     {
       id: 1,
-      durationSecs: 10,
+      durationSecs: 30,
       name: "Active",
       unit: "Seconds" as Unit,
-      sound: "beep.mp3",
-      pingPoint: 10000,
+      active: true,
     },
     {
       id: 2,
-      name: "Pause",
+      name: "Recovery",
       durationSecs: 10,
       unit: "Seconds" as Unit,
-      sound: "beep.mp3",
-      pingPoint: 10000,
+      active: true,
+    },
+    {
+      id: 3,
+      name: "Transition",
+      durationSecs: 10,
+      unit: "Seconds" as Unit,
+      active: false,
     },
   ]);
 
-  const [strokeColor, setStrokeColor] = useState(theme.colors.primary);
-  const currentStrokeColor = getUrgencyColor(timer, isPaused);
+  const statusConfig = {
+    active: {
+      label: "WORK",
+      color: theme.colors.primary,
+      icon: "flash-outline",
+    },
+    recovery: { label: "REST", color: theme.colors.error, icon: "fitness" },
+    transition: {
+      label: "GET READY",
+      color: theme.colors.tertiary,
+      icon: "timer",
+    },
+    paused: {
+      label: "PAUSED",
+      color: theme.colors.outline,
+      icon: "pause-circle",
+    },
+    inactive: {
+      label: "INTERVAL TIMER",
+      color: theme.colors.secondary,
+      icon: "stopwatch-outline",
+    },
+  };
+
+  const getStatus = () => {
+    if (!timer && isPaused) return statusConfig.inactive; // timer is 0 and not started
+    if (isPaused) return statusConfig.paused;
+
+    const key = currentInterval.toLowerCase();
+    return (
+      statusConfig[key as keyof typeof statusConfig] || statusConfig.active
+    );
+  };
+
+  const currentStatus = getStatus();
 
   React.useEffect(() => {
     const subUpdate = DeviceEventEmitter.addListener(
       "IntervalUpdate",
       (data: IntervalUpdateEvent) => {
         const { intervalName: name, remainingMs } = data;
+        setCurrentInterval(data.intervalName);
         setTimer(remainingMs);
 
         const idx = intervals.findIndex((i) => i.name === name);
@@ -78,8 +111,6 @@ export default function Interval() {
 
           // Compute progress (1 → 0)
           const t = remainingMs / duration;
-
-          setStrokeColor(getUrgencyColor(remainingMs, isPaused));
 
           progress.value = t;
         }
@@ -95,7 +126,7 @@ export default function Interval() {
     });
 
     const subStop = DeviceEventEmitter.addListener("IntervalStopped", () => {
-      setIsPaused(false);
+      setIsPaused(true);
       setTimer(0);
       counterRef.current = 0;
     });
@@ -134,156 +165,98 @@ export default function Interval() {
     IntervalServiceModule.stop();
   };
 
-  const removeLastInterval = () => setIntervals((prev) => prev.slice(0, -1));
-
-  const addNewInterval = () => {
-    if (intervals.length > 2) return;
-    setIntervals((prev) => [
-      ...prev,
-      {
-        id: intervals.length + 1,
-        name: INTERVAL_NAMES[intervals.length],
-        durationSecs: 10,
-        unit: "Seconds",
-        sound: "beep.mp3",
-        pingPoint: 10000,
-      },
-    ]);
+  const pressSkip = async () => {
+    IntervalServiceModule.skip();
+    setIsPaused(false);
   };
+
+  const toggleInterval = async (id: number) => {
+    setIntervals((prev) =>
+      prev.map((interval) =>
+        interval.id === id
+          ? { ...interval, active: !interval.active }
+          : interval,
+      ),
+    );
+  };
+
+  const firstInactiveIndex = intervals.findIndex((i) => !i.active);
+  const lastActiveIndex = intervals.findLastIndex((i) => i.active);
+
   return (
     <View
       style={[
         layout.outerContainer,
         {
-          backgroundColor: theme.colors.background,
-          position: "relative",
-          justifyContent: "space-between",
+          justifyContent: "flex-start",
         },
       ]}
     >
-      <CircularTimer
-        radius={125}
-        strokeWidth={10}
-        baseStrokeColor={theme.colors.onSurface}
-        strokeColor={currentStrokeColor}
-        gradientColors={[
-          currentStrokeColor,
-          lightenColor(currentStrokeColor, 0.8),
-        ]}
-        mainTime={main}
-        msPart={ms}
-        fontSize={getTimerFontSize(timer)}
+      <TimerDisplay
+        time={main}
         isPaused={isPaused}
+        isRunning={!!timer}
+        // Pass the values from our local config
+        statusLabel={currentStatus.label}
+        statusColor={currentStatus.color}
+        statusIcon={currentStatus.icon}
+      />
+      <ActionButtonsRow
+        timerActive={timer ? true : false}
+        isPaused={isPaused}
+        pressPlay={startInterval}
+        pressPause={togglePause}
+        pressStop={stopTimer}
+        pressSkipToNext={pressSkip}
       />
 
       <View
         style={{
-          flexDirection: "column",
-          alignItems: "center",
-          paddingVertical: 16,
+          backgroundColor: theme.colors.surfaceVariant + "55",
+          borderRadius: 28,
+          padding: 16,
+
           width: "100%",
-          gap: 16,
-          position: "relative",
+          marginTop: "auto",
         }}
       >
-        {intervals.map((interval) => (
-          <NumbersWithSelect
-            key={interval.id}
-            label={interval.name + ` interval`}
-            onValueChange={(val) =>
-              setIntervals((prev) =>
-                prev.map((i) =>
-                  i.id === interval.id ? { ...i, durationSecs: val } : i,
-                ),
-              )
-            }
-            onUnitChange={(unit) =>
-              setIntervals((prev) =>
-                prev.map((i) =>
-                  i.id === interval.id ? { ...i, unit: unit as Unit } : i,
-                ),
-              )
-            }
-            initialValue={interval.durationSecs.toString()}
-          />
-        ))}
-
-        <View
-          style={[
-            layout.buttonRow,
-            {
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              width: "100%",
-              position: "absolute",
-              top: -30,
-              right: 0,
-              zIndex: 1,
-            },
-          ]}
+        <Text
+          variant="titleMedium"
+          style={{ alignSelf: "center", marginBottom: 8, opacity: 0.7 }}
         >
-          <IconButton
-            icon="add"
-            mode="contained"
-            disabled={intervals.length > 2}
-            size={24}
-            onPress={addNewInterval}
-          />
-
-          <IconButton
-            icon="remove"
-            mode="contained"
-            disabled={intervals.length <= 1}
-            size={24}
-            onPress={removeLastInterval}
-          />
-        </View>
+          Interval Settings
+        </Text>
+        {intervals.map((interval, index) => {
+          const isNextToEnable = index === firstInactiveIndex;
+          const isLastActive = index === lastActiveIndex;
+          return (
+            <NumbersWithSelect
+              key={interval.id}
+              label={interval.name}
+              onValueChange={(val) =>
+                setIntervals((prev) =>
+                  prev.map((i) =>
+                    i.id === interval.id ? { ...i, durationSecs: val } : i,
+                  ),
+                )
+              }
+              onUnitChange={(unit) =>
+                setIntervals((prev) =>
+                  prev.map((i) =>
+                    i.id === interval.id ? { ...i, unit: unit as Unit } : i,
+                  ),
+                )
+              }
+              initialValue={interval.durationSecs.toString()}
+              isActive={interval.active}
+              onToggle={() => toggleInterval(interval.id)}
+              isLast={isNextToEnable}
+              isRemoveable={isLastActive}
+            />
+          );
+        })}
       </View>
 
-      <View style={{ flex: 1 }} />
-
-      <View
-        style={[layout.footer, { position: "absolute", zIndex: 1, bottom: 16 }]}
-      >
-        {!timer && <View style={layout.buttonRow}></View>}
-
-        {!timer ? (
-          <View style={layout.buttonRow}>
-            <Button
-              icon="swap-horizontal-sharp"
-              mode="contained"
-              onPress={startInterval}
-              style={[layout.marginBottom, layout.primaryButton]}
-              labelStyle={{ fontSize: 20 }}
-            >
-              Start interval
-            </Button>
-          </View>
-        ) : (
-          <View style={layout.buttonRow}>
-            <Button
-              icon={isPaused ? "play" : "pause-outline"}
-              mode="contained"
-              onPress={togglePause}
-              style={[layout.marginBottom, layout.flexButton]}
-            >
-              {isPaused ? "Resume" : "Pause"}
-            </Button>
-            <Button
-              icon="stop-outline"
-              mode="contained"
-              onPress={stopTimer}
-              style={[
-                layout.marginBottom,
-                layout.flexButton,
-                { backgroundColor: theme.colors.error },
-              ]}
-            >
-              Stop timer
-            </Button>
-          </View>
-        )}
-      </View>
       <ErrorSnackbar
         visible={isSnackbarVisible}
         message={error}

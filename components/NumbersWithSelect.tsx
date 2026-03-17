@@ -1,5 +1,12 @@
 import { View, StyleSheet } from "react-native";
-import { TextInput, Menu, useTheme, Button, Text } from "react-native-paper";
+import {
+  TextInput,
+  Menu,
+  useTheme,
+  Button,
+  Text,
+  IconButton,
+} from "react-native-paper";
 import React from "react";
 
 interface Props {
@@ -7,6 +14,10 @@ interface Props {
   onValueChange: (value: number) => void;
   onUnitChange: (value: string) => void;
   initialValue: string;
+  isActive: boolean;
+  onToggle: () => void;
+  isLast: boolean;
+  isRemoveable: boolean;
 }
 
 export default function NumbersWithSelect({
@@ -14,6 +25,10 @@ export default function NumbersWithSelect({
   onValueChange,
   onUnitChange,
   initialValue,
+  isActive,
+  onToggle,
+  isLast,
+  isRemoveable,
 }: Props) {
   const theme = useTheme();
   const [value, setValue] = React.useState(initialValue);
@@ -48,97 +63,135 @@ export default function NumbersWithSelect({
   });
 
   return (
-    <View
-      style={{
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <Text variant="labelMedium">{label}</Text>
+    <View style={{ position: "relative" }}>
+      <View style={{ opacity: isActive ? 1 : 0.2 }}>
+        <View style={{ alignItems: "center", marginVertical: 12 }}>
+          <Text variant="labelMedium" style={{ marginBottom: 4 }}>
+            {label}
+          </Text>
+
+          <View
+            style={{
+              flexDirection: "row",
+              height: 56,
+              width: "90%", // Responsive width
+              maxWidth: 320, // Prevents it looking stretched on tablets
+              alignItems: "stretch", // Ensures children fill the 56 height
+            }}
+          >
+            <View style={{ flex: 1, maxWidth: 100 }}>
+              <TextInput
+                value={value}
+                onChangeText={handleChange}
+                keyboardType="numeric"
+                mode="outlined"
+                textColor={theme.colors.background}
+                outlineStyle={{
+                  borderWidth: focused ? 2 : 1,
+                  borderColor: focused
+                    ? theme.colors.outlineVariant
+                    : theme.colors.outlineVariant,
+                  borderTopLeftRadius: 16,
+                  borderBottomLeftRadius: 16,
+                  borderTopRightRadius: 0,
+                  borderBottomRightRadius: 0,
+                }}
+                selectionColor={theme.colors.outlineVariant}
+                cursorColor={theme.colors.outlineVariant}
+                style={{
+                  textAlign: "center",
+                  fontSize: 18,
+                  fontWeight: "700",
+                  backgroundColor: theme.colors.secondary,
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+              />
+            </View>
+
+            {/* Buttons Container - Flex 2 (Gives buttons more room for text) */}
+            <View style={{ flex: 1, flexDirection: "row" }}>
+              <Button
+                onPress={() => handleUnitChange(true)}
+                mode="text" // 'text' allows us to control the bg color via style
+                style={[
+                  styles.button,
+                  {
+                    flex: 1,
+                    borderLeftWidth: 0,
+                    borderRadius: 0, // Middle button stays square
+                    backgroundColor: isSeconds
+                      ? theme.colors.primary
+                      : theme.colors.surface,
+                  },
+                ]}
+                contentStyle={{ height: "100%" }}
+                labelStyle={{
+                  color: isSeconds
+                    ? theme.colors.onPrimary
+                    : theme.colors.primary,
+                }}
+              >
+                Seconds
+              </Button>
+
+              <Button
+                onPress={() => handleUnitChange(false)}
+                mode="text"
+                style={[
+                  styles.button,
+                  {
+                    flex: 1,
+                    borderLeftWidth: 0,
+                    borderTopRightRadius: 16,
+                    borderBottomRightRadius: 16,
+                    backgroundColor: !isSeconds
+                      ? theme.colors.primary
+                      : theme.colors.surface,
+                  },
+                ]}
+                contentStyle={{ height: "100%" }}
+                labelStyle={{
+                  color: !isSeconds
+                    ? theme.colors.onPrimary
+                    : theme.colors.primary,
+                }}
+              >
+                Minutes
+              </Button>
+            </View>
+          </View>
+        </View>
+      </View>
       <View
         style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          borderColor: theme.colors.surfaceVariant,
-          height: 50,
-          minWidth: 300,
-          marginVertical: 8,
+          position: "absolute",
+          top: 0,
+          right: 0,
+          zIndex: 10, // Ensures it stays on top
         }}
       >
-        <TextInput
-          value={value}
-          onChangeText={handleChange}
-          keyboardType="numeric"
-          mode="outlined"
-          outlineStyle={{
-            borderWidth: 1,
-            borderColor: focused
-              ? theme.colors.primary
-              : theme.colors.outlineVariant,
+        {isActive && isRemoveable && label !== "Active" && (
+          <IconButton
+            mode="contained-tonal"
+            onPress={onToggle}
+            icon={isActive ? "remove" : "add"}
+            containerColor={theme.colors.secondaryContainer}
+            iconColor={theme.colors.onSecondaryContainer}
+            style={{ elevation: 4 }}
+          />
+        )}
 
-            borderTopLeftRadius: 16,
-            borderBottomLeftRadius: 16,
-            borderTopRightRadius: 0,
-            borderBottomRightRadius: 0,
-          }}
-          style={{
-            height: 50,
-            width: 80,
-            backgroundColor: theme.colors.surfaceVariant,
-          }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-        <View style={{ width: 150, flex: 1, flexDirection: "row" }}>
-          <Button
-            onPress={() => handleUnitChange(true)}
-            mode={isSeconds ? "contained" : "outlined"}
-            icon={isSeconds ? "checkmark" : ""}
-            style={[
-              styles.button,
-              isSeconds && styles.selected,
-              {
-                flex: 1,
-                borderLeftWidth: 0,
-                borderTopRightRadius: 0,
-                borderBottomRightRadius: 0,
-                backgroundColor: isSeconds
-                  ? theme.colors.primary
-                  : theme.colors.surface,
-              },
-            ]}
-            contentStyle={{
-              height: "100%", // ensures full height
-            }}
-          >
-            Seconds
-          </Button>
-          <Button
-            onPress={() => handleUnitChange(false)}
-            mode={isSeconds ? "contained" : "outlined"}
-            icon={!isSeconds ? "checkmark" : ""}
-            style={[
-              styles.button,
-              {
-                flex: 1,
-                borderLeftWidth: 0,
-                backgroundColor: !isSeconds
-                  ? theme.colors.primary
-                  : theme.colors.surface,
-              },
-            ]}
-            contentStyle={{
-              // forces internal content to stretch
-              height: "100%", // ensures full height
-            }}
-            labelStyle={{
-              color: !isSeconds ? theme.colors.onPrimary : theme.colors.primary,
-            }}
-          >
-            Minutes
-          </Button>
-        </View>
+        {!isActive && isLast && (
+          <IconButton
+            mode="contained-tonal"
+            containerColor={theme.colors.tertiaryContainer}
+            iconColor={theme.colors.onTertiaryContainer}
+            onPress={onToggle}
+            icon={isActive ? "remove" : "add"}
+            style={{ elevation: 4 }}
+          />
+        )}
       </View>
     </View>
   );

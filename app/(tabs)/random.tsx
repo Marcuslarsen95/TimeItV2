@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import DurationPicker from "../../components/DurationPicker";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 import { layout } from "../../styles/layout";
+import TimerDisplay from "@/components/TimerDisplay";
 
 export default function RandomScreen() {
   const [minTime, setMinTime] = useState(30000);
@@ -18,6 +19,8 @@ export default function RandomScreen() {
   const timerRef = React.useRef<ReturnType<typeof setInterval> | undefined>(
     undefined,
   );
+
+  const { main, ms } = formatDateTimer(timer, false);
 
   const step = 7;
 
@@ -96,6 +99,13 @@ export default function RandomScreen() {
         { backgroundColor: theme.colors.background },
       ]}
     >
+      <TimerDisplay
+        time={main}
+        isPaused={isPaused}
+        isRunning={timer ? true : false}
+        statusLabel="Random Timer"
+        statusIcon="dice"
+      />
       <Surface style={[layout.container]} elevation={2}>
         <Surface
           elevation={0}
@@ -109,9 +119,7 @@ export default function RandomScreen() {
             },
           ]}
         >
-          <Text variant="headlineLarge">
-            {displayTimer ? formatDateTimer(timer) : "-- : -- : -- : --"}
-          </Text>
+          1
         </Surface>
         <DurationPicker
           label="Minimum timer"

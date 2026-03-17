@@ -1,15 +1,14 @@
 import { Stack } from "expo-router";
-import { useColorScheme, Platform } from "react-native";
-import {
-  PaperProvider,
-  MD3DarkTheme,
-  MD3LightTheme,
-  adaptNavigationTheme,
-} from "react-native-paper";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useColorScheme, Platform, Keyboard, Pressable } from "react-native";
+import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
+import { useMaterial3Theme } from "@pchmn/expo-material3-theme";
 import { useEffect } from "react";
-import { useKeepAwake } from "expo-keep-awake";
+import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { LinearGradient } from "expo-linear-gradient";
+import * as NavigationBar from "expo-navigation-bar";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -20,6 +19,18 @@ Notifications.setNotificationHandler({
     shouldShowList: true, // iOS-specific
   }),
 });
+
+const hideSystemBars = async () => {
+  if (Platform.OS === "android") {
+    // 1. Hide the Navigation Bar
+    await NavigationBar.setVisibilityAsync("hidden");
+    // 2. Hide the Status Bar (optional, for true fullscreen)
+    // await StatusBar.setHidden(true, 'fade');
+
+    // 3. Optional: Dismiss keyboard if it's open
+    Keyboard.dismiss();
+  }
+};
 
 const _handleSearch = async () => {
   {
@@ -42,83 +53,66 @@ const _goBack = async () => {
 export default function RootLayout() {
   const colorScheme = useColorScheme(); // detects "dark" or "light";
 
+  const [loaded] = useFonts({
+    ShareTechMono: require("../assets/fonts/Share_Tech_Mono/ShareTechMono-Regular.ttf"),
+    ChivoMono: require("../assets/fonts/Chivo_Mono/static/ChivoMono-SemiBold.ttf"),
+    ChivoMonoItalic: require("../assets/fonts/Chivo_Mono/static/ChivoMono-SemiBoldItalic.ttf"),
+  });
+
   useEffect(() => {
     if (Platform.OS === "android") {
       Notifications.setNotificationChannelAsync("notif_3", {
         name: "notif_3",
         importance: Notifications.AndroidImportance.HIGH,
-        sound: "glass_fixed.wav", // must match your /res/raw file
+        sound: "glass_fixed.wav",
       });
+      NavigationBar.setBehaviorAsync("sticky-immersive" as any);
+      // Then hide it
+      NavigationBar.setVisibilityAsync("hidden");
     }
   }, []);
 
-  const lightColors = {
-    primary: "#07881f",
-    onPrimary: "#ffffff",
+  const { theme: md3Theme } = useMaterial3Theme({
+    sourceColor: "#3892b8",
+  });
 
-    secondary: "#5ff7c7",
-    onSecondary: "#022c08",
+  const theme =
+    colorScheme === "dark"
+      ? { ...MD3DarkTheme, colors: md3Theme.dark }
+      : { ...MD3LightTheme, colors: md3Theme.light };
 
-    tertiary: "#0ce4b1",
-    onTertiary: "#022c08",
-
-    background: "#ecfeee",
-    onBackground: "#022c08",
-
-    surface: "#ffffff",
-    onSurface: "#022c08",
-
-    surfaceVariant: "#d7f3da",
-    onSurfaceVariant: "#1a3d1f",
-
-    outline: "#5a7c5f",
-    outlineVariant: "#c3e6c7",
-  };
-
-  const darkColors = {
-    primary: "#75f88e",
-    onPrimary: "#011203",
-
-    secondary: "#089e6f",
-    onSecondary: "#d4fdda",
-
-    tertiary: "#19f3c0",
-    onTertiary: "#011203",
-
-    background: "#011203",
-    onBackground: "#d4fdda",
-
-    surface: "#051a08",
-    onSurface: "#d4fdda",
-
-    surfaceVariant: "#0b2a12",
-    onSurfaceVariant: "#bcecc4",
-
-    outline: "#2f5a36",
-    outlineVariant: "#1a3a20",
-  };
-
-  const theme = {
-    ...(colorScheme === "dark" ? MD3DarkTheme : MD3LightTheme),
-    colors: {
-      ...(colorScheme === "dark" ? MD3DarkTheme.colors : MD3LightTheme.colors),
-      ...(colorScheme === "dark" ? darkColors : lightColors),
-    },
-  };
+  useEffect(() => {
+    NavigationBar.setBackgroundColorAsync("transparent");
+    NavigationBar.setButtonStyleAsync(
+      colorScheme === "dark" ? "light" : "dark",
+    );
+  }, [colorScheme]);
 
   return (
-    <PaperProvider
-      theme={theme}
-      settings={{ icon: (props) => <Ionicons {...props} /> }}
-    >
-      <Stack
-        screenOptions={{
-          // This hides the outer Stack's header globally
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </PaperProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Pressable onPress={hideSystemBars} style={{ flex: 1 }} hitSlop={0}>
+        <PaperProvider
+          theme={theme}
+          settings={{ icon: (props) => <Ionicons {...props} /> }}
+        >
+          <LinearGradient
+            colors={[theme.colors.background, theme.colors.primary]}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 1, y: 0 }}
+            style={{ flex: 1 }}
+            dither={false}
+          >
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: "transparent" },
+              }}
+            >
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </LinearGradient>
+        </PaperProvider>
+      </Pressable>
+    </GestureHandlerRootView>
   );
 }

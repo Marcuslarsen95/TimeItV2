@@ -5,9 +5,6 @@ import { Appbar, useTheme } from "react-native-paper";
 export default function TabLayout() {
   const router = useRouter();
   const theme = useTheme();
-  const navColor = theme.dark
-    ? theme.colors.surfaceVariant
-    : theme.colors.surfaceVariant;
 
   return (
     <Tabs
@@ -17,26 +14,45 @@ export default function TabLayout() {
           return (
             <Appbar.Header
               style={{
-                backgroundColor: navColor,
-                borderBottomColor: theme.colors.outlineVariant,
-                borderBottomWidth: 1,
+                backgroundColor: "transparent",
               }}
             >
               {canGoBack && <Appbar.BackAction onPress={() => router.back()} />}
               <Appbar.Content title={options.title} />
-              <Appbar.Action icon="search" onPress={() => {}} />
+              {/* <Appbar.Action icon="search" onPress={() => {}} /> */}
               <Appbar.Action icon="menu" onPress={() => {}} />
             </Appbar.Header>
           );
         },
         tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.secondary,
         tabBarStyle: {
-          backgroundColor: navColor,
-          borderTopColor: theme.colors.outlineVariant, // Adds a subtle MD3 separator
-          borderTopWidth: 1,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          padding: 20,
+          height: 60,
         },
+
+        sceneStyle: { backgroundColor: "transparent" },
       }}
     >
+      <Tabs.Screen
+        name="interval"
+        options={{
+          title: "Interval",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={
+                focused ? "swap-horizontal-sharp" : "swap-horizontal-outline"
+              }
+              color={color}
+              size={24}
+            />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="index"
         options={{
@@ -57,21 +73,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "help-sharp" : "help-outline"}
-              color={color}
-              size={24}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="interval"
-        options={{
-          title: "Interval",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={
-                focused ? "swap-horizontal-sharp" : "swap-horizontal-outline"
-              }
               color={color}
               size={24}
             />

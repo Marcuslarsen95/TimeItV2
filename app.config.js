@@ -4,20 +4,28 @@ export default {
     slug: "TimeItV2",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/new_logo_clean.png",
     scheme: "timeitv2",
     userInterfaceStyle: "automatic",
 
     android: {
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
-        monochromeImage: "./assets/images/android-icon-monochrome.png",
+        foregroundImage: "./assets/images/logo_no_bg.png",
       },
+
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.agentperry.TimeItV2",
+    },
+    androidStatusBar: {
+      translucent: true,
+      backgroundColor: "transparent",
+    },
+    androidNavigationBar: {
+      visible: "always",
+      buttonColor: "#000000",
+      backgroundColor: "#00000000",
     },
 
     ios: {
@@ -26,7 +34,7 @@ export default {
 
     web: {
       output: "static",
-      favicon: "./assets/images/favicon.png",
+      favicon: "./assets/images/new_logo_clean.png",
     },
 
     plugins: [
@@ -34,7 +42,7 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/icon.png",
+          image: "./assets/images/logo_no_bg.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
@@ -43,6 +51,16 @@ export default {
           },
         },
       ],
+      [
+        "expo-navigation-bar",
+        {
+          appearance: "light",
+          behavior: "sticky-immersive",
+          visibility: "hidden",
+          isTranslucent: true,
+        },
+      ],
+      "expo-font",
     ],
 
     experiments: {
