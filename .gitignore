@@ -40,4 +40,15 @@ app-example
 
 # generated native folders
 /ios
-/android
+# /android - removed so that we can keep kotlin files 
+
+# Android build artifacts
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/GeneratedPluginRegistrant.java
+android/.idea
+*.iml
+*.class
+*.dex
