@@ -4,14 +4,19 @@ export default {
     slug: "TimeItV2",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/new_logo_clean.png",
+    icon: "./assets/images/logo_no_bg_v4.png",
     scheme: "timeitv2",
     userInterfaceStyle: "automatic",
+
+    notification: {
+      icon: "./assets/images/notification_icon.png", // The all-white PNG you made
+      color: "#3892B8", // The color that appears behind the icon in the drawer
+    },
 
     android: {
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/logo_no_bg.png",
+        foregroundImage: "./assets/images/logo_no_bg_v4.png",
       },
 
       edgeToEdgeEnabled: true,
@@ -20,12 +25,12 @@ export default {
     },
     androidStatusBar: {
       translucent: true,
-      backgroundColor: "transparent",
+      backgroundColor: "#00000000",
     },
     androidNavigationBar: {
       visible: "always",
       buttonColor: "#000000",
-      backgroundColor: "#00000000",
+      backgroundColor: "#000000",
     },
 
     ios: {
@@ -42,7 +47,7 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/logo_no_bg.png",
+          image: "./assets/images/logo_no_bg_v4.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",

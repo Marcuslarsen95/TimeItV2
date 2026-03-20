@@ -6,6 +6,8 @@ import { formatDateTimer } from "../../utils/HelperFunctions";
 import { layout } from "../../styles/layout";
 import TimerDisplay from "@/components/TimerDisplay";
 
+import StatusBadge from "@/components/StatusBadge";
+
 export default function RandomScreen() {
   const [minTime, setMinTime] = useState(30000);
   const [maxTime, setMaxTime] = useState(59000);
@@ -99,12 +101,11 @@ export default function RandomScreen() {
         { backgroundColor: theme.colors.background },
       ]}
     >
+      <StatusBadge statusLabel="Random Timer" statusIcon="dice" />
       <TimerDisplay
         time={main}
         isPaused={isPaused}
         isRunning={timer ? true : false}
-        statusLabel="Random Timer"
-        statusIcon="dice"
       />
       <Surface style={[layout.container]} elevation={2}>
         <Surface

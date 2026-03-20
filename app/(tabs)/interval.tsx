@@ -3,11 +3,18 @@ import { useTheme, Text } from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
 import { layout } from "../../styles/layout";
 import { formatDateTimer, convertToMs } from "../../utils/HelperFunctions";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import React, { useState } from "react";
 import NumbersWithSelect from "@/components/NumbersWithSelect";
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
+import StatusBadge from "@/components/StatusBadge";
 import ErrorSnackbar from "@/components/errorSnackBar";
+import DraggableSettings from "@/components/DraggableSetting";
 
 export default function Interval() {
   const theme = useTheme();
@@ -184,52 +191,90 @@ export default function Interval() {
   const lastActiveIndex = intervals.findLastIndex((i) => i.active);
 
   return (
-    <View
-      style={[
-        layout.outerContainer,
-        {
-          justifyContent: "flex-start",
-        },
-      ]}
-    >
-      <TimerDisplay
-        time={main}
-        isPaused={isPaused}
-        isRunning={!!timer}
-        // Pass the values from our local config
-        statusLabel={currentStatus.label}
-        statusColor={currentStatus.color}
-        statusIcon={currentStatus.icon}
-      />
-      <ActionButtonsRow
-        timerActive={timer ? true : false}
-        isPaused={isPaused}
-        pressPlay={startInterval}
-        pressPause={togglePause}
-        pressStop={stopTimer}
-        pressSkipToNext={pressSkip}
-      />
-
-      <View
-        style={{
-          backgroundColor: theme.colors.surfaceVariant + "55",
-          borderRadius: 28,
-          padding: 16,
-
-          width: "100%",
-          marginTop: "auto",
-        }}
-      >
-        <Text
-          variant="titleMedium"
-          style={{ alignSelf: "center", marginBottom: 8, opacity: 0.7 }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={[layout.outerContainer]}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "space-around",
+            alignItems: "center",
+            width: "100%",
+            paddingVertical: 76,
+            gap: 76,
+          }}
         >
-          Interval Settings
-        </Text>
-        {intervals.map((interval, index) => {
-          const isNextToEnable = index === firstInactiveIndex;
-          const isLastActive = index === lastActiveIndex;
-          return (
+          <StatusBadge
+            statusLabel={currentStatus.label}
+            statusColor={currentStatus.color}
+            statusIcon={currentStatus.icon}
+          />
+          <TimerDisplay time={main} isPaused={isPaused} isRunning={!!timer} />
+          <ActionButtonsRow
+            timerActive={timer ? true : false}
+            isPaused={isPaused}
+            pressPlay={startInterval}
+            pressPause={togglePause}
+            pressStop={stopTimer}
+            pressSkipToNext={pressSkip}
+          />
+        </View>
+        {/* {!timer && (
+          <HidablePanel visible={!timer}>
+            <View
+              style={{
+                backgroundColor: theme.colors.surfaceVariant + "55",
+                borderRadius: 28,
+                padding: 16,
+                width: "100%",
+                marginTop: "auto",
+                opacity: !timer ? 1 : 0.5,
+              }}
+            >
+              <Text
+                variant="titleMedium"
+                style={{ alignSelf: "center", marginBottom: 8, opacity: 0.7 }}
+              >
+                Interval Settings
+              </Text>
+              {intervals.map((interval, index) => {
+                const isNextToEnable = index === firstInactiveIndex;
+                const isLastActive = index === lastActiveIndex;
+                return (
+                  <NumbersWithSelect
+                    key={interval.id}
+                    label={interval.name}
+                    onValueChange={(val) =>
+                      setIntervals((prev) =>
+                        prev.map((i) =>
+                          i.id === interval.id
+                            ? { ...i, durationSecs: val }
+                            : i,
+                        ),
+                      )
+                    }
+                    onUnitChange={(unit) =>
+                      setIntervals((prev) =>
+                        prev.map((i) =>
+                          i.id === interval.id
+                            ? { ...i, unit: unit as Unit }
+                            : i,
+                        ),
+                      )
+                    }
+                    initialValue={interval.durationSecs.toString()}
+                    isActive={interval.active}
+                    onToggle={() => toggleInterval(interval.id)}
+                    isLast={isNextToEnable}
+                    isRemoveable={isLastActive}
+                  />
+                );
+              })}
+            </View>
+          </HidablePanel>
+        )} */}
+
+        <DraggableSettings isTimerRunning={!!timer}>
+          {intervals.map((interval, index) => (
             <NumbersWithSelect
               key={interval.id}
               label={interval.name}
@@ -250,20 +295,20 @@ export default function Interval() {
               initialValue={interval.durationSecs.toString()}
               isActive={interval.active}
               onToggle={() => toggleInterval(interval.id)}
-              isLast={isNextToEnable}
-              isRemoveable={isLastActive}
+              isLast={index === firstInactiveIndex}
+              isRemoveable={index === lastActiveIndex}
             />
-          );
-        })}
-      </View>
+          ))}
+        </DraggableSettings>
 
-      <ErrorSnackbar
-        visible={isSnackbarVisible}
-        message={error}
-        onDismiss={() => setIsSnackbarVisible(false)}
-        color={theme.colors.error}
-        textColor={theme.colors.onError}
-      />
-    </View>
+        <ErrorSnackbar
+          visible={isSnackbarVisible}
+          message={error}
+          onDismiss={() => setIsSnackbarVisible(false)}
+          color={theme.colors.error}
+          textColor={theme.colors.onError}
+        />
+      </View>
+    </GestureHandlerRootView>
   );
 }
