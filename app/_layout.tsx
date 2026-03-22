@@ -9,6 +9,7 @@ import * as Notifications from "expo-notifications";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as NavigationBar from "expo-navigation-bar";
+import HeaderMenu from "@/components/HeaderMenu";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -22,13 +23,12 @@ Notifications.setNotificationHandler({
 
 const hideSystemBars = async () => {
   if (Platform.OS === "android") {
-    // 1. Hide the Navigation Bar
-    await NavigationBar.setVisibilityAsync("hidden");
-    // 2. Hide the Status Bar (optional, for true fullscreen)
-    // await StatusBar.setHidden(true, 'fade');
-
-    // 3. Optional: Dismiss keyboard if it's open
-    Keyboard.dismiss();
+    try {
+      await NavigationBar.setVisibilityAsync("hidden");
+      Keyboard.dismiss();
+    } catch (e) {
+      console.log("[ROOT DEBUG] NavigationBar error", e);
+    }
   }
 };
 
@@ -90,29 +90,33 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Pressable onPress={hideSystemBars} style={{ flex: 1 }} hitSlop={0}>
-        <PaperProvider
-          theme={theme}
-          settings={{ icon: (props) => <Ionicons {...props} /> }}
+      <PaperProvider
+        theme={theme}
+        settings={{ icon: (props) => <Ionicons {...props} /> }}
+      >
+        {/* ONE Gradient to rule them all */}
+        <LinearGradient
+          colors={[theme.colors.background, theme.colors.primary]}
+          start={{ x: 0, y: 1 }}
+          end={{ x: 1, y: 0 }}
+          style={{ flex: 1 }}
+          dither={false}
         >
-          <LinearGradient
-            colors={[theme.colors.background, theme.colors.primary]}
-            start={{ x: 0, y: 1 }}
-            end={{ x: 1, y: 0 }}
-            style={{ flex: 1 }}
-            dither={false}
-          >
+          {/* Pressable handles the immersive mode toggle globally */}
+          <Pressable onPress={hideSystemBars} style={{ flex: 1 }} hitSlop={0}>
             <Stack
               screenOptions={{
-                headerShown: false,
+                headerShown: false, // We hide the root header because (main) has its own
                 contentStyle: { backgroundColor: "transparent" },
+                animation: "fade",
               }}
             >
-              <Stack.Screen name="(tabs)" />
+              {/* This points to your (main)/_layout.tsx which has the Burger Menu */}
+              <Stack.Screen name="(main)" />
             </Stack>
-          </LinearGradient>
-        </PaperProvider>
-      </Pressable>
+          </Pressable>
+        </LinearGradient>
+      </PaperProvider>
     </GestureHandlerRootView>
   );
 }

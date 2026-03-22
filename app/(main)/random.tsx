@@ -1,7 +1,6 @@
 import { View, StyleSheet } from "react-native";
 import { Surface, Text, Button, useTheme, Snackbar } from "react-native-paper";
 import React, { useState } from "react";
-import DurationPicker from "../../components/DurationPicker";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 import { layout } from "../../styles/layout";
 import TimerDisplay from "@/components/TimerDisplay";
@@ -122,17 +121,6 @@ export default function RandomScreen() {
         >
           1
         </Surface>
-        <DurationPicker
-          label="Minimum timer"
-          onTimeChange={(val) => setMinTime(val)}
-          initialValue={minTime} // Pass the default state here
-        />
-
-        <DurationPicker
-          label="Maximum timer"
-          onTimeChange={(val) => setMaxTime(val)}
-          initialValue={maxTime} // Pass the default state here
-        />
       </Surface>
       <View style={layout.footer}>
         <View style={layout.buttonRow}>

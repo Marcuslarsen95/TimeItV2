@@ -8,8 +8,9 @@ export const layout = StyleSheet.create({
     flex: 1,
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 16,
-    padding: 16,
+    gap: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 36,
   },
   container: {
     borderRadius: 15,

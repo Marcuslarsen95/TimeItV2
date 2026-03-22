@@ -3,11 +3,7 @@ import { useTheme, Text } from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
 import { layout } from "../../styles/layout";
 import { formatDateTimer, convertToMs } from "../../utils/HelperFunctions";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import React, { useState } from "react";
 import NumbersWithSelect from "@/components/NumbersWithSelect";
 import ActionButtonsRow from "@/components/ActionButtonsRow";
@@ -196,7 +192,7 @@ export default function Interval() {
         <View
           style={{
             flex: 1,
-            justifyContent: "space-around",
+            justifyContent: "flex-start",
             alignItems: "center",
             width: "100%",
             paddingVertical: 76,

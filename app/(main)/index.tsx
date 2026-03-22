@@ -1,8 +1,6 @@
 import { View, AppState } from "react-native";
 import { Surface, Text, Button, useTheme, Snackbar } from "react-native-paper";
 import { layout } from "../../styles/layout";
-
-import DurationPicker from "../../components/DurationPicker";
 import React, { useState } from "react";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 // import { useAudioPlayer } from "expo-audio";
@@ -18,12 +16,11 @@ export default function Index() {
   const [isPaused, setIsPaused] = useState(false);
   const [pausedRemaining, setPausedRemaining] = useState(0); // Stores time left
   const [displayTimer, setDisplayTimer] = useState(true);
-  const { main, ms } = formatDateTimer(timer);
+  const { main, ms } = formatDateTimer(timer, false);
   const theme = useTheme();
   const timerRef = React.useRef<ReturnType<typeof setInterval> | undefined>(
     undefined,
   );
-  const audioSource = require("../../assets/sounds/beep.mp3");
   // const player = useAudioPlayer(audioSource);
   const notifIdRef = React.useRef<string>("null");
   const step = 7;
@@ -165,11 +162,6 @@ export default function Index() {
         >
           <Text variant="headlineLarge">{main}</Text>
         </Surface>
-        <DurationPicker
-          label="Set timer"
-          onTimeChange={(val) => setInputtime(val)}
-          initialValue={inputTime} // Pass the default state here
-        />
       </Surface>
       <View style={layout.footer}>
         {!timer ? (

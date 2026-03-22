@@ -10,7 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const PANEL_HEIGHT = SCREEN_HEIGHT * 0.4; // Takes up half the screen
+const PANEL_HEIGHT = SCREEN_HEIGHT * 0.4;
 
 interface Props {
   children: React.ReactNode;
@@ -32,21 +32,26 @@ export default function DraggableSettings({ children, isTimerRunning }: Props) {
       translateY.value = Math.max(0, event.translationY + context.value);
     })
     .onEnd((event) => {
-      if (translateY.value > PANEL_HEIGHT / 3 || event.velocityY > 500) {
-        translateY.value = withSpring(PANEL_HEIGHT - 60); // Snap to "Mini" view
+      // 1. Check if the user "flicked" the panel up or down
+      const isFlingingUp = event.velocityY < -500;
+      const isFlingingDown = event.velocityY > 500;
+
+      if (isFlingingUp) {
+        // If they flicked UP, snap to the top (0)
+        translateY.value = withSpring(0);
+      } else if (isFlingingDown) {
+        // If they flicked DOWN, snap to your "Mini" view (PANEL_HEIGHT - 60)
+        translateY.value = withSpring(PANEL_HEIGHT - 60);
       } else {
-        translateY.value = withSpring(0); // Snap to "Full" view
+        // 2. If they moved slowly, snap based on position (the threshold)
+        // If it's more than halfway down, close it. Otherwise, open it.
+        if (translateY.value > PANEL_HEIGHT / 2) {
+          translateY.value = withSpring(PANEL_HEIGHT - 60);
+        } else {
+          translateY.value = withSpring(0);
+        }
       }
     });
-
-  // 2. Auto-hide when timer starts
-  useEffect(() => {
-    if (isTimerRunning) {
-      translateY.value = withTiming(PANEL_HEIGHT); // Hide completely
-    } else {
-      translateY.value = withSpring(0); // Show when stopped
-    }
-  }, [isTimerRunning]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -78,12 +83,12 @@ const styles = StyleSheet.create({
   container: {
     position: "absolute",
     bottom: 0,
-    left: 0,
-    right: 0,
+    left: 10,
+    right: 10,
     height: PANEL_HEIGHT,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    elevation: 5, // Shadow for Android
+    elevation: 1,
     paddingHorizontal: 16,
   },
   handle: {
