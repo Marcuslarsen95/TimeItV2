@@ -10,7 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const PANEL_HEIGHT = SCREEN_HEIGHT * 0.4;
+const PANEL_HEIGHT = SCREEN_HEIGHT * 0.3;
 
 interface Props {
   children: React.ReactNode;
@@ -62,7 +62,7 @@ export default function DraggableSettings({ children, isTimerRunning }: Props) {
       <Animated.View
         style={[
           styles.container,
-          { backgroundColor: theme.colors.primaryContainer },
+          { backgroundColor: theme.colors.secondaryContainer + "24" },
           animatedStyle,
         ]}
       >

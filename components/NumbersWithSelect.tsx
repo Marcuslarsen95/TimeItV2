@@ -1,12 +1,5 @@
-import { View, StyleSheet } from "react-native";
-import {
-  TextInput,
-  Menu,
-  useTheme,
-  Button,
-  Text,
-  IconButton,
-} from "react-native-paper";
+import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { TextInput, useTheme, Text, IconButton } from "react-native-paper";
 import React from "react";
 
 interface Props {
@@ -33,166 +26,202 @@ export default function NumbersWithSelect({
   const theme = useTheme();
   const [value, setValue] = React.useState(initialValue);
   const [isSeconds, setIsSeconds] = React.useState(true);
-  const [focused, setFocused] = React.useState(false);
-
-  const handleChange = (text: string) => {
-    setValue(text);
-
-    const num = Number(text);
-    if (!isNaN(num)) {
-      onValueChange(num);
-    }
-  };
+  const [isFocused, setIsFocused] = React.useState(false); // Track focus
 
   const handleUnitChange = (toSeconds: boolean) => {
     setIsSeconds(toSeconds);
     onUnitChange(toSeconds ? "Seconds" : "Minutes");
   };
 
-  const styles = StyleSheet.create({
-    button: {
-      borderTopLeftRadius: 0,
-      borderBottomLeftRadius: 0,
-      borderWidth: 1,
-      borderColor: theme.colors.outlineVariant,
-      backgroundColor: theme.colors.surface,
-    },
-    selected: {
-      backgroundColor: theme.colors.surfaceDisabled,
-    },
-  });
-
   return (
-    <View style={{ position: "relative" }}>
-      <View style={{ opacity: isActive ? 1 : 0.2 }}>
-        <View style={{ alignItems: "center", marginVertical: 12 }}>
-          <Text variant="labelMedium" style={{ marginBottom: 4 }}>
-            {label}
-          </Text>
+    <View style={{ width: "100%", position: "relative" }}>
+      <View style={[styles.wrapper, { opacity: isActive ? 1 : 0.4 }]}>
+        <Text variant="labelLarge" style={styles.label}>
+          {label}
+        </Text>
 
+        <View
+          style={[
+            styles.mainContainer,
+            { backgroundColor: theme.colors.primary + "55" },
+          ]}
+        >
+          {/* NESTED PILL: The Number Input */}
           <View
-            style={{
-              flexDirection: "row",
-              height: 56,
-              width: "90%", // Responsive width
-              maxWidth: 320, // Prevents it looking stretched on tablets
-              alignItems: "stretch", // Ensures children fill the 56 height
-            }}
+            style={[
+              styles.inputWrapper,
+              {
+                backgroundColor: theme.colors.surface,
+                borderWidth: 1.5,
+                borderColor: isFocused
+                  ? theme.colors.primary
+                  : theme.colors.outlineVariant,
+                // Subtle "inner shadow" effect for depth
+                elevation: isFocused ? 4 : 1,
+              },
+            ]}
           >
-            <View style={{ flex: 1, maxWidth: 100 }}>
-              <TextInput
-                value={value}
-                onChangeText={handleChange}
-                keyboardType="numeric"
-                mode="outlined"
-                textColor={theme.colors.background}
-                outlineStyle={{
-                  borderWidth: focused ? 2 : 1,
-                  borderColor: focused
-                    ? theme.colors.outlineVariant
-                    : theme.colors.outlineVariant,
-                  borderTopLeftRadius: 16,
-                  borderBottomLeftRadius: 16,
-                  borderTopRightRadius: 0,
-                  borderBottomRightRadius: 0,
-                }}
-                selectionColor={theme.colors.outlineVariant}
-                cursorColor={theme.colors.outlineVariant}
-                style={{
-                  textAlign: "center",
-                  fontSize: 18,
-                  fontWeight: "700",
-                  backgroundColor: theme.colors.secondary,
-                }}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-              />
-            </View>
+            <TextInput
+              value={value}
+              onChangeText={(text) => {
+                setValue(text);
+                onValueChange(Number(text));
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              keyboardType="numeric"
+              mode="flat"
+              left={
+                <TextInput.Icon
+                  icon="time-outline"
+                  size={20}
+                  color={theme.colors.onSurface}
+                />
+              }
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              style={[styles.input, { backgroundColor: "transparent" }]}
+              textColor={theme.colors.onSurface}
+            />
+          </View>
 
-            {/* Buttons Container - Flex 2 (Gives buttons more room for text) */}
-            <View style={{ flex: 1, flexDirection: "row" }}>
-              <Button
-                onPress={() => handleUnitChange(true)}
-                mode="text" // 'text' allows us to control the bg color via style
+          {/* Minimal Divider - subtle enough to not break the flow */}
+          <View
+            style={[styles.divider, { backgroundColor: theme.colors.surface }]}
+          />
+
+          {/* NESTED PILL: The Toggle */}
+          <View
+            style={[
+              styles.toggleContainer,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={() => handleUnitChange(true)}
+              style={[
+                styles.unitButton,
+                isSeconds && { backgroundColor: theme.colors.primary },
+              ]}
+            >
+              <Text
                 style={[
-                  styles.button,
-                  {
-                    flex: 1,
-                    borderLeftWidth: 0,
-                    borderRadius: 0, // Middle button stays square
-                    backgroundColor: isSeconds
-                      ? theme.colors.primary
-                      : theme.colors.surface,
-                  },
+                  styles.unitText,
+                  isSeconds && { color: theme.colors.onPrimary },
                 ]}
-                contentStyle={{ height: "100%" }}
-                labelStyle={{
-                  color: isSeconds
-                    ? theme.colors.onPrimary
-                    : theme.colors.primary,
-                }}
               >
                 Seconds
-              </Button>
-
-              <Button
-                onPress={() => handleUnitChange(false)}
-                mode="text"
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleUnitChange(false)}
+              style={[
+                styles.unitButton,
+                !isSeconds && { backgroundColor: theme.colors.primary },
+              ]}
+            >
+              <Text
                 style={[
-                  styles.button,
-                  {
-                    flex: 1,
-                    borderLeftWidth: 0,
-                    borderTopRightRadius: 16,
-                    borderBottomRightRadius: 16,
-                    backgroundColor: !isSeconds
-                      ? theme.colors.primary
-                      : theme.colors.surface,
-                  },
+                  styles.unitText,
+                  !isSeconds && { color: theme.colors.onPrimary },
                 ]}
-                contentStyle={{ height: "100%" }}
-                labelStyle={{
-                  color: !isSeconds
-                    ? theme.colors.onPrimary
-                    : theme.colors.primary,
-                }}
               >
-                Minutes
-              </Button>
-            </View>
+                M
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          zIndex: 10, // Ensures it stays on top
-        }}
-      >
-        {isActive && isRemoveable && label !== "Active" && (
+      {/* Action Button */}
+      <View style={styles.actionButtonContainer}>
+        {(isActive && isRemoveable && label !== "Active") ||
+        (!isActive && isLast) ? (
           <IconButton
-            mode="contained-tonal"
-            onPress={onToggle}
             icon={isActive ? "remove" : "add"}
-            containerColor={theme.colors.secondaryContainer}
-            iconColor={theme.colors.onSecondaryContainer}
+            mode="contained"
+            iconColor={isActive ? theme.colors.error : theme.colors.primary}
+            containerColor={theme.colors.surface}
+            size={24}
+            onPress={onToggle}
             style={{ elevation: 4 }}
           />
-        )}
-
-        {!isActive && isLast && (
-          <IconButton
-            mode="contained-tonal"
-            containerColor={theme.colors.tertiaryContainer}
-            iconColor={theme.colors.onTertiaryContainer}
-            onPress={onToggle}
-            icon={isActive ? "remove" : "add"}
-            style={{ elevation: 4 }}
-          />
-        )}
+        ) : null}
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrapper: {
+    marginVertical: 12,
+    alignItems: "center",
+    width: "100%",
+  },
+  label: {
+    marginBottom: 10,
+    opacity: 0.6,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  mainContainer: {
+    flexDirection: "row",
+    height: 70, // Slightly taller for better touch targets
+    width: "100%",
+    maxWidth: 300,
+    borderRadius: 35, // Perfect Pill shape
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  inputWrapper: {
+    flex: 1,
+    height: 54,
+    borderRadius: 27, // Nested Pill
+    justifyContent: "center",
+    overflow: "hidden",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  input: {
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    height: 54,
+  },
+  divider: {
+    width: 1,
+    height: "40%",
+    marginHorizontal: 12,
+    opacity: 0.5,
+  },
+  toggleContainer: {
+    flexDirection: "row",
+    height: 54,
+    borderRadius: 27, // Matches the inputWrapper shape
+    padding: 4,
+    alignItems: "center",
+    elevation: 2,
+  },
+  unitButton: {
+    paddingHorizontal: 12,
+    height: 46, // Internal button slightly smaller
+    borderRadius: 23,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 50,
+  },
+  unitText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  actionButtonContainer: {
+    position: "absolute",
+    right: 0,
+    top: 45,
+    elevation: 10,
+  },
+});

@@ -11,6 +11,8 @@ import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import ErrorSnackbar from "@/components/errorSnackBar";
 import DraggableSettings from "@/components/DraggableSetting";
+import TimerInputGroup from "@/components/TimerInputGroup";
+import IntervalSegmentPicker from "@/components/IntervalSegmentPicker";
 
 export default function Interval() {
   const theme = useTheme();
@@ -86,6 +88,10 @@ export default function Interval() {
       icon: "stopwatch-outline",
     },
   };
+
+  const [editingId, setEditingId] = useState(1);
+  const selectedInterval =
+    intervals.find((i) => i.id === editingId) || intervals[0];
 
   const getStatus = () => {
     if (!timer && isPaused) return statusConfig.inactive; // timer is 0 and not started
@@ -269,7 +275,7 @@ export default function Interval() {
           </HidablePanel>
         )} */}
 
-        <DraggableSettings isTimerRunning={!!timer}>
+        {/* <DraggableSettings isTimerRunning={!!timer}>
           {intervals.map((interval, index) => (
             <NumbersWithSelect
               key={interval.id}
@@ -295,6 +301,59 @@ export default function Interval() {
               isRemoveable={index === lastActiveIndex}
             />
           ))}
+        </DraggableSettings> */}
+
+        {/* <DraggableSettings isTimerRunning={!!timer}>
+          {intervals.map((interval, index) => {
+            // Logic for showing the Add/Remove buttons
+            const isNextToEnable = index === firstInactiveIndex;
+            const isLastActive = index === lastActiveIndex;
+
+            // Convert existing data to total seconds for the new component
+            const totalSeconds =
+              convertToMs(interval.durationSecs, interval.unit) / 1000;
+
+            return (
+              <TimerInputGroup
+                key={interval.id}
+                label={interval.name}
+                initialValueInSeconds={totalSeconds}
+                isActive={interval.active}
+                isLast={isNextToEnable}
+                isRemoveable={isLastActive}
+                onToggle={() => toggleInterval(interval.id)}
+                onDurationChange={(newTotalSeconds) => {
+                  // Update the state back to your original format
+                  setIntervals((prev) =>
+                    prev.map((i) =>
+                      i.id === interval.id
+                        ? {
+                            ...i,
+                            durationSecs: newTotalSeconds,
+                            unit: "Seconds" as Unit, // We simplify to Seconds as the component handles the math
+                          }
+                        : i,
+                    ),
+                  );
+                }}
+              />
+            );
+          })}
+        </DraggableSettings> */}
+
+        <DraggableSettings isTimerRunning={!!timer}>
+          <IntervalSegmentPicker
+            intervals={intervals}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            onDurationChange={(id, newSeconds) => {
+              setIntervals((prev) =>
+                prev.map((i) =>
+                  i.id === id ? { ...i, durationSecs: newSeconds } : i,
+                ),
+              );
+            }}
+          />
         </DraggableSettings>
 
         <ErrorSnackbar

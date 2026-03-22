@@ -94,7 +94,6 @@ export default function RootLayout() {
         theme={theme}
         settings={{ icon: (props) => <Ionicons {...props} /> }}
       >
-        {/* ONE Gradient to rule them all */}
         <LinearGradient
           colors={[theme.colors.background, theme.colors.primary]}
           start={{ x: 0, y: 1 }}
