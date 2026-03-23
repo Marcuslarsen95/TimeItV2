@@ -1,6 +1,6 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { SegmentedButtons, useTheme, Text } from "react-native-paper";
+import { SegmentedButtons, useTheme, Text, Switch } from "react-native-paper";
 import TimerInputGroup from "./TimerInputGroup";
 
 interface Interval {
@@ -15,6 +15,8 @@ interface Props {
   editingId: number;
   setEditingId: (id: number) => void;
   onDurationChange: (id: number, newSeconds: number) => void;
+  onToggle: (id: number) => void;
+  onInputFocusChange?: (isFocused: boolean) => void;
 }
 
 export default function IntervalSegmentPicker({
@@ -22,6 +24,8 @@ export default function IntervalSegmentPicker({
   editingId,
   setEditingId,
   onDurationChange,
+  onToggle,
+  onInputFocusChange,
 }: Props) {
   const theme = useTheme();
   const selectedInterval =
@@ -29,74 +33,96 @@ export default function IntervalSegmentPicker({
 
   return (
     <View style={styles.container}>
-      {/* 1. THE SELECTOR */}
+      {/* 1. THE SELECTOR - 'disabled' removed to allow clicking inactive segments */}
       <SegmentedButtons
         value={editingId.toString()}
         onValueChange={(val) => setEditingId(parseInt(val))}
         buttons={intervals.map((i) => {
           const isSelected = editingId === i.id;
 
-          // Logic for background color
-          const getBgColor = () => {
-            if (!i.active) return theme.colors.surfaceDisabled;
-            return isSelected ? theme.colors.primary : theme.colors.secondary;
+          const getBackgroundColor = () => {
+            if (isSelected) {
+              return i.active
+                ? theme.colors.primary
+                : theme.colors.primaryContainer; // Tinted selection for disabled
+            }
+            return i.active
+              ? theme.colors.secondary
+              : theme.colors.surfaceDisabled;
           };
 
-          // Logic for text/icon color
           const getTextColor = () => {
-            if (!i.active) return theme.colors.onSurfaceDisabled;
-            return isSelected
-              ? theme.colors.onPrimary
-              : theme.colors.onSecondary;
+            if (isSelected) {
+              return i.active
+                ? theme.colors.onPrimary
+                : theme.colors.onPrimaryContainer;
+            }
+            return i.active
+              ? theme.colors.onSecondary
+              : theme.colors.onSurfaceDisabled;
           };
 
           return {
             value: i.id.toString(),
             label: i.name,
-            disabled: !i.active, // Keeps the button un-pressable if inactive
             checkedColor: getTextColor(),
             uncheckedColor: getTextColor(),
             style: {
-              borderColor: theme.colors.outlineVariant,
-              backgroundColor: getBgColor(),
-              // We can keep a slight opacity drop to reinforce the 'disabled' look
-              opacity: i.active ? 1 : 0.7,
+              borderColor: isSelected
+                ? theme.colors.primary
+                : theme.colors.outlineVariant,
+              borderWidth: isSelected ? 2 : 1, // Make the selection border thicker
+              backgroundColor: getBackgroundColor(),
+              opacity: i.active ? 1 : 0.8, // Slightly higher opacity so we can see the selection
             },
             labelStyle: {
               fontWeight: isSelected ? "900" : "600",
-              textTransform: "uppercase",
               fontSize: 12,
+              // Ensure text is visible
+              color: getTextColor(),
             },
           };
         })}
         style={styles.segments}
       />
 
-      {/* 2. THE MASTER INPUT */}
-      <View style={styles.inputContainer}>
+      {/* 2. THE TOGGLE ROW - Controls the currently selected segment */}
+      <View
+        style={[
+          styles.toggleRow,
+          { backgroundColor: theme.colors.surfaceVariant + "33" },
+        ]}
+      >
+        <Text
+          variant="labelMedium"
+          style={{ color: theme.colors.onSurfaceVariant, fontWeight: "700" }}
+        >
+          ENABLE {selectedInterval.name.toUpperCase()}
+        </Text>
+        <Switch
+          value={selectedInterval.active}
+          onValueChange={() => onToggle(selectedInterval.id)}
+          color={theme.colors.primary}
+        />
+      </View>
+
+      {/* 3. THE MASTER INPUT */}
+      <View
+        style={[
+          styles.inputContainer,
+          { opacity: selectedInterval.active ? 1 : 0.4 },
+        ]}
+      >
         <TimerInputGroup
           label={`Set ${selectedInterval.name} Time`}
           initialValueInSeconds={selectedInterval.durationSecs}
           isActive={selectedInterval.active}
-          isLast={false}
-          isRemoveable={false}
-          onToggle={() => {}}
           onDurationChange={(newSeconds: number) =>
             onDurationChange(editingId, newSeconds)
           }
+          onFocusChange={onInputFocusChange}
         />
       </View>
-
-      {!selectedInterval.active && (
-        <View style={styles.helperContainer}>
-          <Text
-            variant="bodySmall"
-            style={{ color: theme.colors.error, fontWeight: "700" }}
-          >
-            THIS INTERVAL IS CURRENTLY DISABLED
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -109,18 +135,22 @@ const styles = StyleSheet.create({
   },
   segments: {
     width: "100%",
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
   inputContainer: {
     width: "100%",
     alignItems: "center",
-  },
-  helperContainer: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "transparent", // Space for layout consistency
   },
 });

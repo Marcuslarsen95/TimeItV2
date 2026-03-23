@@ -10,43 +10,58 @@ import Animated, {
 } from "react-native-reanimated";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const PANEL_HEIGHT = SCREEN_HEIGHT * 0.3;
 
 interface Props {
   children: React.ReactNode;
   isTimerRunning: boolean;
+  maxHeight: number;
 }
 
-export default function DraggableSettings({ children, isTimerRunning }: Props) {
+export default function DraggableSettings({
+  children,
+  isTimerRunning,
+  maxHeight,
+}: Props) {
   const theme = useTheme();
+
+  // 1. Calculations for the "Floor"
+  const PANEL_HEIGHT = SCREEN_HEIGHT * maxHeight;
+  const MIN_VISIBLE_HEIGHT = 60; // Static: Handle + Title + Padding
+  const CLOSED_THRESHOLD = PANEL_HEIGHT - MIN_VISIBLE_HEIGHT;
+
   const translateY = useSharedValue(0);
   const context = useSharedValue(0);
 
-  // 1. Gesture Logic
+  // 2. Sync: When keyboard opens (maxHeight jumps to 0.8), snap to top
+  useEffect(() => {
+    if (maxHeight > 0.5) {
+      translateY.value = withTiming(0);
+    }
+  }, [maxHeight]);
+
+  // 3. Gesture Logic with Clamping
   const gesture = Gesture.Pan()
     .onStart(() => {
       context.value = translateY.value;
     })
     .onUpdate((event) => {
-      // Allow dragging down, but resist dragging up past the limit
-      translateY.value = Math.max(0, event.translationY + context.value);
+      const nextValue = event.translationY + context.value;
+
+      // CLAMP: Stops at 0 (top) and CLOSED_THRESHOLD (bottom)
+      translateY.value = Math.max(0, Math.min(nextValue, CLOSED_THRESHOLD));
     })
     .onEnd((event) => {
-      // 1. Check if the user "flicked" the panel up or down
       const isFlingingUp = event.velocityY < -500;
       const isFlingingDown = event.velocityY > 500;
 
       if (isFlingingUp) {
-        // If they flicked UP, snap to the top (0)
         translateY.value = withSpring(0);
       } else if (isFlingingDown) {
-        // If they flicked DOWN, snap to your "Mini" view (PANEL_HEIGHT - 60)
-        translateY.value = withSpring(PANEL_HEIGHT - 60);
+        translateY.value = withSpring(CLOSED_THRESHOLD);
       } else {
-        // 2. If they moved slowly, snap based on position (the threshold)
-        // If it's more than halfway down, close it. Otherwise, open it.
-        if (translateY.value > PANEL_HEIGHT / 2) {
-          translateY.value = withSpring(PANEL_HEIGHT - 60);
+        // Snap based on position
+        if (translateY.value > CLOSED_THRESHOLD / 2) {
+          translateY.value = withSpring(CLOSED_THRESHOLD);
         } else {
           translateY.value = withSpring(0);
         }
@@ -62,7 +77,12 @@ export default function DraggableSettings({ children, isTimerRunning }: Props) {
       <Animated.View
         style={[
           styles.container,
-          { backgroundColor: theme.colors.secondaryContainer + "24" },
+          {
+            height: PANEL_HEIGHT,
+            top: SCREEN_HEIGHT - PANEL_HEIGHT,
+            backgroundColor: theme.colors.elevation.level2,
+            zIndex: 10,
+          },
           animatedStyle,
         ]}
       >
@@ -82,13 +102,15 @@ export default function DraggableSettings({ children, isTimerRunning }: Props) {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    bottom: 0,
     left: 10,
     right: 10,
-    height: PANEL_HEIGHT,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    elevation: 1,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     paddingHorizontal: 16,
   },
   handle: {
@@ -104,5 +126,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     opacity: 0.6,
   },
-  content: {},
+  content: {
+    marginTop: 10,
+  },
 });

@@ -36,6 +36,8 @@ export default function Interval() {
   const [error, setError] = useState("");
   const [isPaused, setIsPaused] = useState(true);
   const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
+  const [isEditingTime, setIsEditingTime] = useState(false);
+  const sheetHeight = isEditingTime ? 0.8 : 0.4;
   const [currentInterval, setCurrentInterval] =
     useState<IntervalName>("Active");
   const progress = useSharedValue(0);
@@ -151,13 +153,21 @@ export default function Interval() {
   const counterRef = React.useRef(0);
 
   const startInterval = () => {
+    const activeIntervals = intervals.filter((i) => i.active);
+
+    if (activeIntervals.length === 0) {
+      setError("Please enable at least one interval.");
+      setIsSnackbarVisible(true);
+      return;
+    }
+
     setIsPaused(false);
     setTimer(0);
     counterRef.current = 0;
 
     IntervalServiceModule.startSequence(
       JSON.stringify(
-        intervals.map((i) => ({
+        activeIntervals.map((i) => ({
           name: i.name,
           durationMs: convertToMs(i.durationSecs, i.unit),
         })),
@@ -220,132 +230,14 @@ export default function Interval() {
             pressSkipToNext={pressSkip}
           />
         </View>
-        {/* {!timer && (
-          <HidablePanel visible={!timer}>
-            <View
-              style={{
-                backgroundColor: theme.colors.surfaceVariant + "55",
-                borderRadius: 28,
-                padding: 16,
-                width: "100%",
-                marginTop: "auto",
-                opacity: !timer ? 1 : 0.5,
-              }}
-            >
-              <Text
-                variant="titleMedium"
-                style={{ alignSelf: "center", marginBottom: 8, opacity: 0.7 }}
-              >
-                Interval Settings
-              </Text>
-              {intervals.map((interval, index) => {
-                const isNextToEnable = index === firstInactiveIndex;
-                const isLastActive = index === lastActiveIndex;
-                return (
-                  <NumbersWithSelect
-                    key={interval.id}
-                    label={interval.name}
-                    onValueChange={(val) =>
-                      setIntervals((prev) =>
-                        prev.map((i) =>
-                          i.id === interval.id
-                            ? { ...i, durationSecs: val }
-                            : i,
-                        ),
-                      )
-                    }
-                    onUnitChange={(unit) =>
-                      setIntervals((prev) =>
-                        prev.map((i) =>
-                          i.id === interval.id
-                            ? { ...i, unit: unit as Unit }
-                            : i,
-                        ),
-                      )
-                    }
-                    initialValue={interval.durationSecs.toString()}
-                    isActive={interval.active}
-                    onToggle={() => toggleInterval(interval.id)}
-                    isLast={isNextToEnable}
-                    isRemoveable={isLastActive}
-                  />
-                );
-              })}
-            </View>
-          </HidablePanel>
-        )} */}
 
-        {/* <DraggableSettings isTimerRunning={!!timer}>
-          {intervals.map((interval, index) => (
-            <NumbersWithSelect
-              key={interval.id}
-              label={interval.name}
-              onValueChange={(val) =>
-                setIntervals((prev) =>
-                  prev.map((i) =>
-                    i.id === interval.id ? { ...i, durationSecs: val } : i,
-                  ),
-                )
-              }
-              onUnitChange={(unit) =>
-                setIntervals((prev) =>
-                  prev.map((i) =>
-                    i.id === interval.id ? { ...i, unit: unit as Unit } : i,
-                  ),
-                )
-              }
-              initialValue={interval.durationSecs.toString()}
-              isActive={interval.active}
-              onToggle={() => toggleInterval(interval.id)}
-              isLast={index === firstInactiveIndex}
-              isRemoveable={index === lastActiveIndex}
-            />
-          ))}
-        </DraggableSettings> */}
-
-        {/* <DraggableSettings isTimerRunning={!!timer}>
-          {intervals.map((interval, index) => {
-            // Logic for showing the Add/Remove buttons
-            const isNextToEnable = index === firstInactiveIndex;
-            const isLastActive = index === lastActiveIndex;
-
-            // Convert existing data to total seconds for the new component
-            const totalSeconds =
-              convertToMs(interval.durationSecs, interval.unit) / 1000;
-
-            return (
-              <TimerInputGroup
-                key={interval.id}
-                label={interval.name}
-                initialValueInSeconds={totalSeconds}
-                isActive={interval.active}
-                isLast={isNextToEnable}
-                isRemoveable={isLastActive}
-                onToggle={() => toggleInterval(interval.id)}
-                onDurationChange={(newTotalSeconds) => {
-                  // Update the state back to your original format
-                  setIntervals((prev) =>
-                    prev.map((i) =>
-                      i.id === interval.id
-                        ? {
-                            ...i,
-                            durationSecs: newTotalSeconds,
-                            unit: "Seconds" as Unit, // We simplify to Seconds as the component handles the math
-                          }
-                        : i,
-                    ),
-                  );
-                }}
-              />
-            );
-          })}
-        </DraggableSettings> */}
-
-        <DraggableSettings isTimerRunning={!!timer}>
+        <DraggableSettings isTimerRunning={!!timer} maxHeight={sheetHeight}>
           <IntervalSegmentPicker
             intervals={intervals}
             editingId={editingId}
             setEditingId={setEditingId}
+            onInputFocusChange={(focused) => setIsEditingTime(focused)}
+            onToggle={toggleInterval} // This connects the Switch to your state
             onDurationChange={(id, newSeconds) => {
               setIntervals((prev) =>
                 prev.map((i) =>
