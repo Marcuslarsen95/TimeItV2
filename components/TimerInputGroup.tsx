@@ -8,6 +8,7 @@ interface Props {
   onDurationChange: (totalSeconds: number) => void;
   isActive: boolean;
   onFocusChange?: (isFocused: boolean) => void;
+  size?: number;
 }
 
 export default function TimerInputGroup({
@@ -16,6 +17,7 @@ export default function TimerInputGroup({
   onDurationChange,
   isActive,
   onFocusChange,
+  size = 200,
 }: Props) {
   const theme = useTheme();
 
@@ -73,7 +75,12 @@ export default function TimerInputGroup({
           elevation={isActive ? 1 : 0}
           style={[
             styles.pillContainer,
-            { backgroundColor: theme.colors.secondary },
+            {
+              backgroundColor: theme.colors.secondary,
+              height: size,
+              width: size,
+              borderRadius: size / 2,
+            },
           ]}
         >
           {/* MINUTES */}
@@ -88,6 +95,8 @@ export default function TimerInputGroup({
                   focusedField === "m"
                     ? theme.colors.surface + "22"
                     : "transparent",
+                height: size / 3,
+                width: size / 2,
               },
             ]}
           >
@@ -98,7 +107,13 @@ export default function TimerInputGroup({
               onFocus={() => handleFocus("m")}
               onBlur={handleBlur}
               keyboardType="numeric"
-              style={[styles.input, { color: theme.colors.onPrimary }]}
+              style={[
+                styles.input,
+                {
+                  color: theme.colors.onPrimary,
+                  fontSize: size / 5,
+                },
+              ]}
               selectionColor={theme.colors.primary}
               selectTextOnFocus={true}
             />
@@ -108,10 +123,14 @@ export default function TimerInputGroup({
               Mins
             </Text>
           </View>
-
-          <Text style={[styles.colon, { color: theme.colors.onPrimary }]}>
-            :
-          </Text>
+          <View
+            style={{
+              width: 60,
+              height: 1.5,
+              backgroundColor: theme.colors.onPrimary,
+              opacity: 0.3,
+            }}
+          />
 
           {/* SECONDS - Fixed focusedField check below */}
           <View
@@ -125,6 +144,8 @@ export default function TimerInputGroup({
                   focusedField === "s"
                     ? theme.colors.surface + "22"
                     : "transparent",
+                height: size / 3,
+                width: size / 2,
               },
             ]}
           >
@@ -135,7 +156,10 @@ export default function TimerInputGroup({
               onFocus={() => handleFocus("s")}
               onBlur={handleBlur}
               keyboardType="numeric"
-              style={[styles.input, { color: theme.colors.onPrimary }]}
+              style={[
+                styles.input,
+                { color: theme.colors.onPrimary, fontSize: size / 5 },
+              ]}
               selectionColor={theme.colors.primary}
               selectTextOnFocus={true}
             />
@@ -152,7 +176,7 @@ export default function TimerInputGroup({
 }
 
 const styles = StyleSheet.create({
-  container: { width: "100%", alignItems: "center", marginVertical: 10 },
+  container: { width: "100%", alignItems: "center" },
   contentWrapper: { alignItems: "center" },
   label: {
     marginBottom: 8,
@@ -162,29 +186,23 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   pillContainer: {
-    flexDirection: "row",
-    height: 96,
-    width: "100%",
-    maxWidth: 280,
-    borderRadius: 36,
+    flexDirection: "column", // stack vertically
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    borderWidth: 2,
+    // subtle ring
   },
   unitPill: {
     flexDirection: "row",
     alignItems: "center",
-    height: 76,
-    width: 100,
+
     paddingHorizontal: 10,
     borderWidth: 1.5,
   },
   input: {
     flex: 1,
-    fontSize: 36,
     fontWeight: "900",
     textAlign: "center",
-    padding: 0,
   },
   unitIndicator: {
     fontSize: 11,

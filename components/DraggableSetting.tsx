@@ -15,12 +15,20 @@ interface Props {
   children: React.ReactNode;
   isTimerRunning: boolean;
   maxHeight: number;
+  label: string;
+  initialOpen?: boolean; // new: controls launch position
+  isOpen?: boolean; // new: optional external control
+  onOpenChange?: (open: boolean) => void; // new: notify parent of state
 }
 
 export default function DraggableSettings({
   children,
   isTimerRunning,
   maxHeight,
+  label,
+  initialOpen,
+  isOpen,
+  onOpenChange,
 }: Props) {
   const theme = useTheme();
 
@@ -29,15 +37,29 @@ export default function DraggableSettings({
   const MIN_VISIBLE_HEIGHT = 60; // Static: Handle + Title + Padding
   const CLOSED_THRESHOLD = PANEL_HEIGHT - MIN_VISIBLE_HEIGHT;
 
-  const translateY = useSharedValue(0);
+  const translateY = useSharedValue(
+    initialOpen === false ? CLOSED_THRESHOLD : 0,
+  );
   const context = useSharedValue(0);
 
   // 2. Sync: When keyboard opens (maxHeight jumps to 0.8), snap to top
   useEffect(() => {
     if (maxHeight > 0.5) {
       translateY.value = withTiming(0);
+      return;
     }
-  }, [maxHeight]);
+    // If parent is controlling open state, respect it
+    if (isOpen !== undefined) {
+      translateY.value = withSpring(isOpen ? 0 : CLOSED_THRESHOLD);
+      return;
+    }
+    // Otherwise fall back to timer-based behaviour
+    if (isTimerRunning) {
+      translateY.value = withSpring(CLOSED_THRESHOLD);
+    } else {
+      translateY.value = withSpring(0);
+    }
+  }, [isTimerRunning, isOpen, maxHeight, CLOSED_THRESHOLD]);
 
   // 3. Gesture Logic with Clamping
   const gesture = Gesture.Pan()
@@ -60,6 +82,7 @@ export default function DraggableSettings({
         translateY.value = withSpring(CLOSED_THRESHOLD);
       } else {
         // Snap based on position
+
         if (translateY.value > CLOSED_THRESHOLD / 2) {
           translateY.value = withSpring(CLOSED_THRESHOLD);
         } else {
@@ -68,9 +91,15 @@ export default function DraggableSettings({
       }
     });
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    // Instead of transform, we animate the height that this component
+    // actually occupies in the flex layout.
+    return {
+      // We calculate how much height to "take up" in the parent layout
+      // This forces the content above it to move.
+      height: PANEL_HEIGHT - translateY.value,
+    };
+  });
 
   return (
     <GestureDetector gesture={gesture}>
@@ -78,10 +107,8 @@ export default function DraggableSettings({
         style={[
           styles.container,
           {
-            height: PANEL_HEIGHT,
-            top: SCREEN_HEIGHT - PANEL_HEIGHT,
-            backgroundColor: theme.colors.elevation.level2,
-            zIndex: 10,
+            backgroundColor: theme.colors.secondaryContainer,
+            overflow: "hidden", // Keeps children from bleeding out bottom
           },
           animatedStyle,
         ]}
@@ -90,7 +117,7 @@ export default function DraggableSettings({
         <View style={styles.handle} />
 
         <Text variant="titleMedium" style={styles.title}>
-          Interval Settings
+          {label}
         </Text>
 
         <View style={styles.content}>{children}</View>
@@ -101,16 +128,10 @@ export default function DraggableSettings({
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    left: 10,
-    right: 10,
+    position: "relative",
+    marginHorizontal: 10,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
     paddingHorizontal: 16,
   },
   handle: {
@@ -126,7 +147,5 @@ const styles = StyleSheet.create({
     marginTop: 10,
     opacity: 0.6,
   },
-  content: {
-    marginTop: 10,
-  },
+  content: {},
 });

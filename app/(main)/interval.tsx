@@ -1,35 +1,31 @@
 import { View, NativeModules, DeviceEventEmitter } from "react-native";
 import { useTheme, Text } from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
-import { layout } from "../../styles/layout";
+import { layout } from "@/styles/layout";
 import { formatDateTimer, convertToMs } from "../../utils/HelperFunctions";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import React, { useState } from "react";
-import NumbersWithSelect from "@/components/NumbersWithSelect";
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import ErrorSnackbar from "@/components/errorSnackBar";
 import DraggableSettings from "@/components/DraggableSetting";
-import TimerInputGroup from "@/components/TimerInputGroup";
 import IntervalSegmentPicker from "@/components/IntervalSegmentPicker";
+import {
+  Interval,
+  Unit,
+  UserPreferences,
+  useUserPreferences,
+} from "@/hooks/use-user-preferences";
 
-export default function Interval() {
+export default function IntervalScreen() {
   const theme = useTheme();
-  type Unit = "Seconds" | "Minutes" | "Hours";
   type IntervalName = "Active" | "Pause" | "Transition";
 
   interface IntervalUpdateEvent {
     intervalName: IntervalName;
     remainingMs: number;
-  }
-
-  interface Interval {
-    id: number;
-    name: string;
-    durationSecs: number;
-    unit: Unit;
-    active: boolean;
+    timerType: string;
   }
 
   const [timer, setTimer] = useState(0);
@@ -37,35 +33,17 @@ export default function Interval() {
   const [isPaused, setIsPaused] = useState(true);
   const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
   const [isEditingTime, setIsEditingTime] = useState(false);
-  const sheetHeight = isEditingTime ? 0.8 : 0.4;
+  const sheetHeight = isEditingTime ? 0.8 : 0.5;
   const [currentInterval, setCurrentInterval] =
     useState<IntervalName>("Active");
   const progress = useSharedValue(0);
   const { IntervalServiceModule } = NativeModules;
   const { main, ms } = formatDateTimer(timer, false);
-  const [intervals, setIntervals] = useState<Interval[]>([
-    {
-      id: 1,
-      durationSecs: 30,
-      name: "Active",
-      unit: "Seconds" as Unit,
-      active: true,
-    },
-    {
-      id: 2,
-      name: "Recovery",
-      durationSecs: 10,
-      unit: "Seconds" as Unit,
-      active: true,
-    },
-    {
-      id: 3,
-      name: "Transition",
-      durationSecs: 10,
-      unit: "Seconds" as Unit,
-      active: false,
-    },
-  ]);
+  const { preferences, updatePreference, isLoading } = useUserPreferences();
+  const intervals = preferences.interval.segments;
+  const setIntervals = (updater: (prev: Interval[]) => Interval[]) => {
+    updatePreference("interval", { segments: updater(intervals) });
+  };
 
   const statusConfig = {
     active: {
@@ -92,8 +70,6 @@ export default function Interval() {
   };
 
   const [editingId, setEditingId] = useState(1);
-  const selectedInterval =
-    intervals.find((i) => i.id === editingId) || intervals[0];
 
   const getStatus = () => {
     if (!timer && isPaused) return statusConfig.inactive; // timer is 0 and not started
@@ -108,9 +84,22 @@ export default function Interval() {
   const currentStatus = getStatus();
 
   React.useEffect(() => {
+    IntervalServiceModule.getState().then(
+      (state: { isRunning: boolean; isPaused: boolean; timerType: string }) => {
+        if (state.timerType !== "interval") return; // not our timer
+        if (!state.isRunning) return;
+        if (state.isRunning || !state.isPaused) {
+          setIsPaused(state.isPaused);
+        }
+      },
+    );
+  }, []);
+
+  React.useEffect(() => {
     const subUpdate = DeviceEventEmitter.addListener(
       "IntervalUpdate",
       (data: IntervalUpdateEvent) => {
+        if (data.timerType !== "interval") return;
         const { intervalName: name, remainingMs } = data;
         setCurrentInterval(data.intervalName);
         setTimer(remainingMs);
@@ -128,19 +117,33 @@ export default function Interval() {
       },
     );
 
-    const subPause = DeviceEventEmitter.addListener("IntervalPaused", () => {
-      setIsPaused(true);
-    });
+    const subPause = DeviceEventEmitter.addListener(
+      "IntervalPaused",
+      (data) => {
+        if (data?.timerType !== "interval") return;
+        console.log("UI: Received Pause Event");
+        setIsPaused(true);
+      },
+    );
 
-    const subResume = DeviceEventEmitter.addListener("IntervalResumed", () => {
-      setIsPaused(false);
-    });
+    const subResume = DeviceEventEmitter.addListener(
+      "IntervalResumed",
+      (data) => {
+        if (data?.timerType !== "interval") return;
+        console.log("UI: Received Resume Event");
+        setIsPaused(false);
+      },
+    );
 
-    const subStop = DeviceEventEmitter.addListener("IntervalStopped", () => {
-      setIsPaused(true);
-      setTimer(0);
-      counterRef.current = 0;
-    });
+    const subStop = DeviceEventEmitter.addListener(
+      "IntervalStopped",
+      (data) => {
+        if (data?.timerType !== "interval") return;
+        setIsPaused(true);
+        setTimer(0);
+        counterRef.current = 0;
+      },
+    );
 
     return () => {
       subUpdate.remove();
@@ -172,6 +175,8 @@ export default function Interval() {
           durationMs: convertToMs(i.durationSecs, i.unit),
         })),
       ),
+      true,
+      "interval",
     );
   };
 
@@ -199,22 +204,12 @@ export default function Interval() {
     );
   };
 
-  const firstInactiveIndex = intervals.findIndex((i) => !i.active);
-  const lastActiveIndex = intervals.findLastIndex((i) => i.active);
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={[layout.outerContainer]}>
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "flex-start",
-            alignItems: "center",
-            width: "100%",
-            paddingVertical: 76,
-            gap: 76,
-          }}
-        >
+      {/* 1. Main Root: No padding at the bottom or sides here so sheet can be flush */}
+      <View style={{ flex: 1 }}>
+        {/* 2. Upper Content: This handles the Timer, Badge, etc. with padding */}
+        <View style={[layout.mainContainer]}>
           <StatusBadge
             statusLabel={currentStatus.label}
             statusColor={currentStatus.color}
@@ -228,16 +223,25 @@ export default function Interval() {
             pressPause={togglePause}
             pressStop={stopTimer}
             pressSkipToNext={pressSkip}
+            firstButtonIcon="refresh"
+            firstButtonLabel="Reset"
+            thirdButtonIcon="play-skip-forward"
+            thirdButtonLabel="Skip"
           />
         </View>
 
-        <DraggableSettings isTimerRunning={!!timer} maxHeight={sheetHeight}>
+        {/* 3. Settings Tray: Sits outside the padded View above */}
+        <DraggableSettings
+          label="Interval Settings"
+          isTimerRunning={!!timer}
+          maxHeight={sheetHeight}
+        >
           <IntervalSegmentPicker
             intervals={intervals}
             editingId={editingId}
             setEditingId={setEditingId}
             onInputFocusChange={(focused) => setIsEditingTime(focused)}
-            onToggle={toggleInterval} // This connects the Switch to your state
+            onToggle={toggleInterval}
             onDurationChange={(id, newSeconds) => {
               setIntervals((prev) =>
                 prev.map((i) =>

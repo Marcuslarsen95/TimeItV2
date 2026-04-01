@@ -21,7 +21,7 @@ export default function ErrorSnackbar({
       visible={visible}
       onDismiss={onDismiss}
       style={{ backgroundColor: color }}
-      wrapperStyle={{ bottom: -50 }}
+      wrapperStyle={{}}
     >
       <Text style={{ color: textColor }}>{message}</Text>
     </Snackbar>

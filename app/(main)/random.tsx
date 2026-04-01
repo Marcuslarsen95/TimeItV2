@@ -1,190 +1,283 @@
-import { View, StyleSheet } from "react-native";
-import { Surface, Text, Button, useTheme, Snackbar } from "react-native-paper";
-import React, { useState } from "react";
-import { formatDateTimer } from "../../utils/HelperFunctions";
+import {
+  View,
+  StyleSheet,
+  NativeModules,
+  DeviceEventEmitter,
+} from "react-native";
+import { useTheme, Text } from "react-native-paper";
 import { layout } from "../../styles/layout";
-import TimerDisplay from "@/components/TimerDisplay";
+import React, { useState, useEffect } from "react";
+import { formatDateTimer, getRandomMs } from "../../utils/HelperFunctions";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+// Your shared components
+import ActionButtonsRow from "@/components/ActionButtonsRow";
+import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
+import ErrorSnackbar from "@/components/errorSnackBar";
+import DraggableSettings from "@/components/DraggableSetting";
+import TimerInputGroup from "@/components/TimerInputGroup";
+
+import {
+  Interval,
+  Unit,
+  UserPreferences,
+  useUserPreferences,
+} from "@/hooks/use-user-preferences";
 
 export default function RandomScreen() {
-  const [minTime, setMinTime] = useState(30000);
-  const [maxTime, setMaxTime] = useState(59000);
-  const [timer, setTimer] = useState(0);
-  const [error, setError] = useState("");
-  const [displayTimer, setDisplayTimer] = useState(false);
-  const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [pausedRemaining, setPausedRemaining] = useState(0); // Stores time left
   const theme = useTheme();
-  const timerRef = React.useRef<ReturnType<typeof setInterval> | undefined>(
-    undefined,
-  );
 
-  const { main, ms } = formatDateTimer(timer, false);
+  // Timer State
+  const [timer, setTimer] = useState(0);
+  const [isPaused, setIsPaused] = useState(true);
+  const { IntervalServiceModule } = NativeModules;
 
-  const step = 7;
+  // UI State
+  const [isEditingMinTime, setIsEditingMinTime] = useState(false);
+  const [isEditingMaxTime, setIsEditingMaxTime] = useState(false);
+  const [error, setError] = useState("");
+  const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
+
+  const sheetHeight = isEditingMinTime || isEditingMaxTime ? 0.7 : 0.4;
+  const { main } = formatDateTimer(timer, false);
+
+  const { preferences, updatePreference, isLoading } = useUserPreferences();
+  const hasPreferences = preferences.hasCompletedSetup;
+  const minSecs = preferences.random.minSecs;
+  const maxSecs = preferences.random.maxSecs;
+
+  const setMinSecs = (value: number) => {
+    updatePreference("random", { ...preferences.random, minSecs: value });
+  };
+
+  const setMaxSecs = (value: number) => {
+    updatePreference("random", { ...preferences.random, maxSecs: value });
+  };
+
+  const getStatus = () => {
+    // 1. Initial State (Timer is 0 and we haven't started)
+    if (timer === 0) {
+      return {
+        label: "READY",
+        color: theme.colors.secondary,
+        icon: "play-circle-outline",
+      };
+    }
+
+    // 2. User hit pause while it was running
+    if (isPaused) {
+      return {
+        label: "PAUSED",
+        color: theme.colors.outline,
+        icon: "pause-circle",
+      };
+    }
+
+    // 3. Active Countdown
+    return {
+      label: "RUNNING",
+      color: theme.colors.primary,
+      icon: "timer-outline",
+    };
+  };
+
+  const currentStatus = getStatus();
+
+  const startTimer = () => {
+    console.log("minSecs:", minSecs, "maxSecs:", maxSecs);
+    if (minSecs <= 0 || maxSecs <= 0) return;
+    if (maxSecs <= minSecs) {
+      setError("Max time must be higher than Min time");
+      setIsSnackbarVisible(true);
+      return;
+    }
+    updatePreference("hasCompletedSetup", true);
+    const minMs = minSecs * 1000;
+    const maxMs = maxSecs * 1000;
+    setIsPaused(false);
+
+    const randomTime = getRandomMs(minMs, maxMs);
+
+    // Treat this as a single-item interval list
+    const singleInterval = [
+      {
+        name: "Random",
+        durationMs: randomTime,
+      },
+    ];
+
+    IntervalServiceModule.startSequence(
+      JSON.stringify(singleInterval),
+      false,
+      "random",
+    );
+  };
+
+  const skipForward = () => {
+    IntervalServiceModule.skipForward(10000);
+  };
+
+  // Replace togglePause with this:
+  const togglePause = () => {
+    IntervalServiceModule.toggle();
+    // The listener below will update the isPaused state
+  };
 
   React.useEffect(() => {
+    IntervalServiceModule.getState().then(
+      (state: { isRunning: boolean; isPaused: boolean; timerType: string }) => {
+        if (state.timerType !== "random") return; // not our timer
+        if (!state.isRunning) return;
+        if (state.isRunning || !state.isPaused) {
+          setIsPaused(state.isPaused);
+        }
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    const subUpdate = DeviceEventEmitter.addListener(
+      "IntervalUpdate",
+      (data) => {
+        if (data.timerType !== "random") return;
+        setTimer(data.remainingMs);
+      },
+    );
+
+    const subPause = DeviceEventEmitter.addListener(
+      "IntervalPaused",
+      (data) => {
+        if (data?.timerType !== "random") return;
+        setIsPaused(true);
+      },
+    );
+
+    const subResume = DeviceEventEmitter.addListener(
+      "IntervalResumed",
+      (data) => {
+        if (data?.timerType !== "random") return;
+        setIsPaused(false);
+      },
+    );
+
+    const subStop = DeviceEventEmitter.addListener(
+      "IntervalStopped",
+      (data) => {
+        if (data?.timerType !== "random") return;
+        setIsPaused(true);
+        setTimer(0);
+      },
+    );
+
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current); // clears interval
+      subUpdate.remove();
+      subPause.remove();
+      subResume.remove();
+      subStop.remove();
     };
   }, []);
 
-  const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    if (minTime > 0 && maxTime > 0) {
-      if (maxTime > minTime) {
-        const randomTime = Math.floor(
-          Math.random() * (maxTime - minTime) + minTime,
-        );
-        const endTime = Date.now() + randomTime; // set the datetime of when the timer should stop. Helps to keep timer going if app is paused or occupied
-        setTimer(randomTime);
-
-        timerRef.current = setInterval(async () => {
-          const remaining = endTime - Date.now(); // Check if timer is past now
-
-          if (remaining <= 0) {
-            setTimer(0);
-            if (timerRef.current) clearInterval(timerRef.current);
-            timerRef.current = undefined;
-          } else {
-            setTimer(remaining);
-          }
-        }, step);
-      } else {
-        setIsSnackbarVisible(true);
-        setError("Maximum timer must be higher than minimum timer.");
-      }
-    } else {
-      setIsSnackbarVisible(true);
-      setError(
-        "Both timers must be set! Make sure that the maximum timer is higher than the minimum one.",
-      );
-    }
-  };
-
-  const stopTimer = () => {
-    clearInterval(timerRef.current);
-    setTimer(0);
-  };
-
-  const togglePause = () => {
-    // PAUSING
-    if (!isPaused) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      setPausedRemaining(timer);
-      setIsPaused(true);
-    } else {
-      // RESUMING
-      setIsPaused(false);
-      const newEndTime = Date.now() + pausedRemaining;
-
-      timerRef.current = setInterval(() => {
-        const remaining = newEndTime - Date.now();
-        if (remaining <= 0) {
-          setTimer(0);
-          clearInterval(timerRef.current);
-        } else {
-          setTimer(remaining);
-        }
-      }, 69);
-    }
+  const stopTimer = async () => {
+    setIsPaused(true);
+    IntervalServiceModule.stop();
   };
 
   return (
-    <View
-      style={[
-        layout.outerContainer,
-        { backgroundColor: theme.colors.background },
-      ]}
-    >
-      <StatusBadge statusLabel="Random Timer" statusIcon="dice" />
-      <TimerDisplay
-        time={main}
-        isPaused={isPaused}
-        isRunning={timer ? true : false}
-      />
-      <Surface style={[layout.container]} elevation={2}>
-        <Surface
-          elevation={0}
-          style={[
-            layout.timerSurface,
-            {
-              borderWidth: 1,
-              borderColor: theme.colors.outlineVariant, // Subtle green-tinted border
-              borderRadius: 12,
-              backgroundColor: theme.colors.surfaceVariant,
-            },
-          ]}
-        >
-          1
-        </Surface>
-      </Surface>
-      <View style={layout.footer}>
-        <View style={layout.buttonRow}>
-          <Button
-            icon={displayTimer ? "eye-off-outline" : "eye-outline"}
-            mode="contained"
-            onPress={() => setDisplayTimer(!displayTimer)}
-            style={[
-              layout.secondaryButton,
-              layout.marginBottom,
-              { backgroundColor: theme.colors.tertiary },
-            ]}
-          >
-            {displayTimer ? "Hide timer" : "Show timer"}
-          </Button>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
+        <View style={[layout.mainContainer]}>
+          <StatusBadge
+            statusLabel={currentStatus.label}
+            statusColor={currentStatus.color}
+            statusIcon={currentStatus.icon}
+          />
+
+          <TimerDisplay
+            time={"??:??"}
+            isPaused={isPaused}
+            isRunning={!!timer}
+            isRandom={true}
+          />
+
+          <ActionButtonsRow
+            timerActive={timer > 0}
+            isPaused={isPaused}
+            pressPlay={startTimer}
+            pressPause={togglePause}
+            pressStop={stopTimer}
+            pressSkipToNext={skipForward}
+            firstButtonIcon="stop"
+            firstButtonLabel="Stop"
+            thirdButtonIcon="play-forward"
+            thirdButtonLabel="10s"
+          />
         </View>
 
-        {!timer ? (
-          <View style={layout.buttonRow}>
-            <Button
-              icon="timer-outline"
-              mode="contained"
-              onPress={startTimer}
-              style={layout.primaryButton}
-            >
-              Start random timer!
-            </Button>
-          </View>
-        ) : (
-          <View style={layout.buttonRow}>
-            <Button
-              icon={isPaused ? "play" : "pause-outline"}
-              mode="contained"
-              onPress={togglePause}
-              style={[layout.marginBottom, layout.flexButton]}
-            >
-              {isPaused ? "Resume" : "Pause"}
-            </Button>
-            <Button
-              icon="stop-outline"
-              mode="contained"
-              onPress={stopTimer}
-              style={[
-                layout.marginBottom,
-                layout.flexButton,
-                { backgroundColor: theme.colors.error },
-              ]}
-            >
-              Stop timer
-            </Button>
-          </View>
-        )}
+        <ErrorSnackbar
+          visible={isSnackbarVisible}
+          message={error}
+          onDismiss={() => setIsSnackbarVisible(false)}
+          color={theme.colors.error}
+          textColor={theme.colors.onError}
+        />
       </View>
-      <Snackbar
-        visible={isSnackbarVisible}
-        onDismiss={() => setIsSnackbarVisible(false)}
-        style={{ backgroundColor: theme.colors.error }}
-        theme={{ colors: { accent: theme.colors.onError } }}
-        wrapperStyle={{ bottom: -50 }}
+      {/* Draggable Settings: Just the time input */}
+      <DraggableSettings
+        label="Timer Settings"
+        isTimerRunning={!!timer}
+        maxHeight={sheetHeight}
+        initialOpen={!hasPreferences}
       >
-        <Text style={{ color: theme.colors.onError }}>{error}</Text>
-      </Snackbar>
-    </View>
+        <View style={styles.inputWrapper}>
+          <View style={styles.inputItem}>
+            <TimerInputGroup
+              label="Set Min Duration"
+              initialValueInSeconds={minSecs}
+              isActive={!timer} // Only allow editing if timer isn't running
+              onDurationChange={setMinSecs}
+              onFocusChange={(focused) => setIsEditingMinTime(focused)}
+              size={175}
+            />
+          </View>
+          <View style={styles.inputItem}>
+            <TimerInputGroup
+              label="Set Max Duration"
+              initialValueInSeconds={maxSecs}
+              isActive={!timer} // Only allow editing if timer isn't running
+              onDurationChange={setMaxSecs}
+              onFocusChange={(focused) => setIsEditingMaxTime(focused)}
+              size={175}
+            />
+          </View>
+        </View>
+        {!timer && (
+          <Text style={layout.helperText}>
+            Adjust the min and max times above, then press play to start.
+          </Text>
+        )}
+      </DraggableSettings>
+    </GestureHandlerRootView>
   );
 }
 
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  mainContent: {
+    flex: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: 76,
+    gap: 76,
+  },
+  inputWrapper: {
+    marginTop: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
+  inputItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+});

@@ -1,7 +1,6 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
 import React from "react";
-import { Button, IconButton, useTheme } from "react-native-paper";
-import { layout } from "../styles/layout";
+import { IconButton, useTheme, Text } from "react-native-paper";
 
 interface ActionButtonProps {
   timerActive: boolean;
@@ -11,6 +10,10 @@ interface ActionButtonProps {
   pressPause: () => void;
   pressStop: () => void;
   pressSkipToNext: () => void;
+  thirdButtonIcon: string;
+  thirdButtonLabel: string;
+  firstButtonIcon: string;
+  firstButtonLabel: string;
 }
 
 const ActionButtonsRow = ({
@@ -21,6 +24,10 @@ const ActionButtonsRow = ({
   pressPause,
   pressStop,
   pressSkipToNext,
+  thirdButtonIcon,
+  thirdButtonLabel,
+  firstButtonIcon,
+  firstButtonLabel,
 }: ActionButtonProps) => {
   const theme = useTheme();
   return (
@@ -30,35 +37,51 @@ const ActionButtonsRow = ({
         justifyContent: "center",
         alignItems: "center",
         gap: 24,
+        width: "100%",
+        borderRadius: 50,
+        borderWidth: 1.5,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        overflow: "visible",
+        borderColor: theme.colors.primaryContainer,
+        backgroundColor: theme.colors.primaryContainer + "33",
       }}
     >
+      <View style={{ alignItems: "center" }}>
+        <IconButton
+          icon={firstButtonIcon}
+          mode="outlined"
+          size={40}
+          onPress={pressStop}
+          iconColor={theme.colors.secondary}
+          contentStyle={{}}
+          style={{ borderWidth: 0, marginBottom: -5 }}
+        />
+        <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
+          {firstButtonLabel}
+        </Text>
+      </View>
       <IconButton
-        icon="refresh"
-        mode="outlined"
-        size={40}
-        onPress={pressStop}
-        iconColor={theme.colors.secondary}
-        contentStyle={{}}
-        style={{ borderWidth: 0 }}
-      />
-      <IconButton
-        icon={isPaused ? "play-outline" : "pause-outline"}
+        icon={isPaused ? "play" : "pause"}
         mode="outlined"
         size={64}
         onPress={timerActive ? pressPause : pressPlay}
         iconColor={theme.colors.primary}
-        contentStyle={{ marginLeft: 6 }}
         style={{ borderWidth: 0 }}
       />
-
-      <IconButton
-        icon="play-skip-forward-outline"
-        mode="outlined"
-        size={40}
-        onPress={pressSkipToNext}
-        iconColor={theme.colors.secondary}
-        style={{ borderWidth: 0 }}
-      />
+      <View style={{ alignItems: "center" }}>
+        <IconButton
+          icon={thirdButtonIcon}
+          mode="outlined"
+          size={40}
+          onPress={pressSkipToNext}
+          iconColor={theme.colors.secondary}
+          style={{ borderWidth: 0, marginBottom: -5 }}
+        />
+        <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
+          {thirdButtonLabel}
+        </Text>
+      </View>
     </View>
   );
 };

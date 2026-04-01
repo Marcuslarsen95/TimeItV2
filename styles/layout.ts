@@ -4,13 +4,20 @@ export const layout = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  mainContainer: {
+    flex: 1,
+    justifyContent: "space-evenly",
+    alignItems: "center",
+    paddingHorizontal: 18, // Move the layout padding here
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
   outerContainer: {
     flex: 1,
     justifyContent: "space-between",
     alignItems: "center",
     gap: 18,
     paddingHorizontal: 18,
-    paddingVertical: 36,
   },
   container: {
     borderRadius: 15,
@@ -78,5 +85,14 @@ export const layout = StyleSheet.create({
     height: 50,
     maxWidth: 500,
     justifyContent: "center",
+  },
+
+  // text styling
+
+  helperText: {
+    marginTop: 10,
+    opacity: 0.5,
+    fontSize: 12,
+    textAlign: "center",
   },
 });

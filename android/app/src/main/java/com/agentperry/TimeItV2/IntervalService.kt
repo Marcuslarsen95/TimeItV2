@@ -27,6 +27,9 @@ class IntervalService : Service() {
 
     companion object {
         var reactContext: ReactApplicationContext? = null
+        var isRunning: Boolean = false
+        var isPaused: Boolean = true
+        var timerType: String = "interval"
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -34,10 +37,10 @@ class IntervalService : Service() {
     private var currentIndex = 0
     private var intervalStartTime = 0L
     private var remainingBeforePause = 0L
-    private var isPaused = false
     private var lastNotificationUpdateTime = 0L
     private var beep: MediaPlayer? = null
     private var ping: MediaPlayer? = null
+    private var shouldLoop = true
 
     override fun onCreate() {
         super.onCreate()
@@ -60,6 +63,15 @@ class IntervalService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent == null) return START_STICKY
+
+
+    if (intent.hasExtra("timerType")) {
+        timerType = intent.getStringExtra("timerType") ?: "interval"
+    }
+
+    if (intent.hasExtra("repeat")) {
+        shouldLoop = intent.getBooleanExtra("repeat", true)
+    }
 
     // 1. HANDLE JSON DATA
     if (intent.hasExtra("intervals")) {
@@ -115,9 +127,13 @@ class IntervalService : Service() {
         if (isPaused) resumeEngine() else pauseEngine()
     }
 
-    // FIXED SKIP LOGIC
     if (intent.getBooleanExtra("skip", false)) {
         skipToNext()
+    }
+
+    if (intent.getBooleanExtra("skipForward", false)) {
+        val ms = intent.getDoubleExtra("skipForwardMs", 10000.0)
+        skipForward(ms)
     }
 
     return START_STICKY
@@ -140,57 +156,88 @@ class IntervalService : Service() {
     }
 
     private fun resumeEngine() {
-
+        isRunning = true
         isPaused = false
-        intervalStartTime = System.currentTimeMillis() -
+        sendResumedToJS()
+        
+        // Calculate start time based on the saved remaining time
+        intervalStartTime = System.currentTimeMillis() - 
             (intervals[currentIndex].durationMs - remainingBeforePause)
-
-        val current = intervals[currentIndex]
-        val now = System.currentTimeMillis()
-        val elapsed = now - intervalStartTime
-        val remaining = current.durationMs - elapsed
-
+        
+        // Reset this so it doesn't interfere with future skips
+        remainingBeforePause = 0L 
 
         handler.post(tickRunnable)
-
-        updateNotification(remaining)
-
-
-        sendResumedToJS()
+        // ... rest of your code
     }
 
     private fun skipToNext() {
-    if (intervals.isEmpty()) return 
+        if (intervals.isEmpty()) return 
 
-    currentIndex++ 
-    if (currentIndex >= intervals.size) {
-        currentIndex = 0
+        // 1. Move to next index
+        currentIndex++ 
+        if (currentIndex >= intervals.size) {
+            currentIndex = 0
+        }
+
+        val nextInterval = intervals[currentIndex]
+
+        // 2. Fix the Pause Logic
+        if (isPaused) {
+            remainingBeforePause = nextInterval.durationMs
+            sendPausedToJS()
+        } else {
+            // If running, simply reset the start anchor to "now"
+            intervalStartTime = System.currentTimeMillis()
+        }
+
+        // 3. Audio Feedback
+        beep?.let { if (!it.isPlaying) it.start() }
+
+        // 4. Update UI Layers
+        sendUpdateToJS(nextInterval.name, nextInterval.durationMs)
+        updateNotification(nextInterval.durationMs) 
     }
 
-    intervalStartTime = System.currentTimeMillis()
-    remainingBeforePause = 0L 
+    private fun skipForward(ms: Double) {
+        if (intervals.isEmpty()) return
 
-    beep?.let { if (!it.isPlaying) it.start() }
-
-    val nextInterval = intervals[currentIndex]
-    sendUpdateToJS(nextInterval.name, nextInterval.durationMs)
-    
-    // FIX: ensure this says durationMs
-    updateNotification(nextInterval.durationMs) 
-}
+        if (isPaused) {
+            if (remainingBeforePause < ms.toLong()) {
+                remainingBeforePause = 0
+            } else {
+                remainingBeforePause -= ms.toLong()  // 👈
+            }
+            sendUpdateToJS(intervals[currentIndex].name, remainingBeforePause)
+        } else {
+            val remaining = intervals[currentIndex].durationMs - (System.currentTimeMillis() - intervalStartTime)
+            if (remaining < ms.toLong()) {
+                isRunning = false
+                handler.removeCallbacksAndMessages(null)
+                sendStoppedToJS()
+                handler.postDelayed({ stopSelf() }, 1000)
+                return
+            } else {
+                intervalStartTime -= ms.toLong()  // 👈
+            }
+        }
+    }
 
 
 
 
     private fun startEngine() {
+        isRunning = true
         isPaused = false
         remainingBeforePause = 0L
         currentIndex = 0
+        lastBeepSecond = -1L 
         intervalStartTime = System.currentTimeMillis()
         handler.post(tickRunnable)
     }
 
     private fun resetEngine() {
+        isRunning = false
         handler.removeCallbacksAndMessages(null)
         isPaused = false
         currentIndex = 0
@@ -205,6 +252,7 @@ class IntervalService : Service() {
         val params = Arguments.createMap().apply {
             putString("intervalName", intervalName)
             putDouble("remainingMs", remainingMs.toDouble())
+            putString("timerType", timerType)
         }
 
         ctx
@@ -214,74 +262,88 @@ class IntervalService : Service() {
 
     private fun sendPausedToJS() {
         val ctx = reactContext ?: return
+
+        val params = Arguments.createMap().apply {
+            putString("timerType", timerType)  
+        }
         ctx
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("IntervalPaused", null)
+            .emit("IntervalPaused", params)
     }
 
     private fun sendResumedToJS() {
         val ctx = reactContext ?: return
+
+        val params = Arguments.createMap().apply {
+            putString("timerType", timerType)  
+        }
         ctx
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("IntervalResumed", null)
+            .emit("IntervalResumed", params)
     }
 
     private fun sendStoppedToJS() {
         val ctx = reactContext ?: return
+
+        val params = Arguments.createMap().apply {
+            putString("timerType", timerType)  
+        }
+
         ctx
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("IntervalStopped", null)
+            .emit("IntervalStopped", params)
     }
 
+
+    private var lastBeepSecond = -1L
 
     private val tickRunnable = object : Runnable {
-    
-    override fun run() {
+        override fun run() {
 
-        if (intervals.isEmpty()) {
-            return
-        }
-        
-        if (isPaused) {
-            return
-        }
+            if (!isRunning || intervals.isEmpty() || isPaused) return
 
+            val now = System.currentTimeMillis()
+            val current = intervals[currentIndex]
+            val elapsed = now - intervalStartTime
+            val remaining = current.durationMs - elapsed
 
-        val now = System.currentTimeMillis()
-        val current = intervals[currentIndex]
-        val elapsed = now - intervalStartTime
-        val remaining = current.durationMs - elapsed
+            val currentSecond = Math.ceil(remaining.toDouble() / 1000.0).toLong()
 
-        sendUpdateToJS(current.name, remaining)
-
-        if (now - lastNotificationUpdateTime >= 1000) {
-            updateNotification(remaining)
-            lastNotificationUpdateTime = now
-        }
-
-
-        if (remaining in 970..1030 ||
-            remaining in 1970..2030 ||
-            remaining in 2970..3030
-        ) {
-            ping?.let { if (!it.isPlaying) it.start() }
-        }
-
-        if (remaining <= 0) {
-            beep?.let { if (!it.isPlaying) it.start() }
-            currentIndex++
-
-            if (currentIndex >= intervals.size) {
-                currentIndex = 0
+            if (currentSecond in 1..3 && currentSecond != lastBeepSecond) {
+                ping?.let { if  (!it.isPlaying) it.start()}
+                lastBeepSecond = currentSecond
             }
 
-            intervalStartTime = System.currentTimeMillis()
-            updateNotification(intervals[currentIndex].durationMs)
-        }
+            sendUpdateToJS(current.name, remaining)
 
-        handler.postDelayed(this, 50)
+            if (now - lastNotificationUpdateTime >= 1000) {
+                updateNotification(remaining)
+                lastNotificationUpdateTime = now
+            }
+
+
+            if (remaining <= 0) {
+                beep?.let { if  (!it.isPlaying) it.start()}
+                lastBeepSecond = -1L 
+                
+                if (!shouldLoop && currentIndex == intervals.size -1){
+                    isRunning = false
+                    handler.removeCallbacksAndMessages(null)
+                    sendStoppedToJS()
+                    handler.postDelayed({  
+                        stopSelf()
+                    }, 1000)
+                    return
+                }
+
+                currentIndex = (currentIndex + 1) % intervals.size
+                intervalStartTime = System.currentTimeMillis()
+                updateNotification(intervals[currentIndex].durationMs)
+            }
+
+            handler.postDelayed(this, 50)
+        }
     }
-}
 
 
     private fun startForegroundService() {
@@ -350,10 +412,12 @@ private fun buildNotification(isPaused: Boolean, remainingMs: Long): Notificatio
         .setCategory(NotificationCompat.CATEGORY_SERVICE) // Helps Android prioritize layout
 
     if (isPaused) {
-        builder.setContentText("Paused • ${formatTime(remainingMs)}")
+        val text = if (timerType == "random") "Random timer paused" else "Paused • ${formatTime(remainingMs)}"
+        builder.setContentText(text)
         builder.addAction(R.drawable.play_sharp_white, "Resume", resumePending)
     } else {
-        builder.setContentText("Running • ${formatTime(remainingMs)}")
+        val text = if (timerType == "random") "Random timer running" else "Running • ${formatTime(remainingMs)}"
+        builder.setContentText(text)
         builder.addAction(R.drawable.pause_sharp_white, "Pause", pausePending)
     }
 

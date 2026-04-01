@@ -4,6 +4,8 @@ import android.content.Intent
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.Arguments
 
 class IntervalModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -23,11 +25,13 @@ class IntervalModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun startSequence(intervalsJson: String) {
+    fun startSequence(intervalsJson: String, withRepeat: Boolean, timerType: String) {
         val context = reactApplicationContext
         val intent = Intent(context, IntervalService::class.java)
         intent.putExtra("start", true)
         intent.putExtra("intervals", intervalsJson)
+        intent.putExtra("repeat", withRepeat)
+        intent.putExtra("timerType", timerType)
         context.startForegroundService(intent)
     }
 
@@ -71,6 +75,24 @@ class IntervalModule(reactContext: ReactApplicationContext) :
         val intent = Intent(context, IntervalService::class.java)
         intent.putExtra("skip", true)
         context.startService(intent)
+    }
+
+    @ReactMethod
+    fun skipForward(ms: Double) {
+        val context = reactApplicationContext
+        val intent = Intent(context, IntervalService::class.java)
+        intent.putExtra("skipForward", true)
+        intent.putExtra("skipForwardMs", ms)
+        context.startService(intent)
+    }
+
+    @ReactMethod
+    fun getState(promise: Promise) {
+        val map = Arguments.createMap()
+        map.putBoolean("isRunning", IntervalService.isRunning)
+        map.putBoolean("isPaused", IntervalService.isPaused)
+        map.putString("timerType", IntervalService.timerType)
+        promise.resolve(map)
     }
 
 }
