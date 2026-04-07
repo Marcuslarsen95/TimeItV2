@@ -3,27 +3,34 @@ import {
   StyleSheet,
   NativeModules,
   DeviceEventEmitter,
+  Animated,
 } from "react-native";
-import { useTheme, Text } from "react-native-paper";
+import {
+  useTheme,
+  Text,
+  IconButton,
+  Button,
+  Portal,
+  Modal,
+} from "react-native-paper";
 import { layout } from "../../styles/layout";
-import React, { useState, useEffect } from "react";
-import { formatDateTimer, getRandomMs } from "../../utils/HelperFunctions";
+import React, { useState, useEffect, useRef } from "react";
+import { getRandomMs } from "../../utils/HelperFunctions";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-// Your shared components
+// Shared components
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
-import ErrorSnackbar from "@/components/errorSnackBar";
-import DraggableSettings from "@/components/DraggableSetting";
-import TimerInputGroup from "@/components/TimerInputGroup";
+import AppSnackbar from "@/components/AppSnackBar";
+import SavePresetDialog from "@/components/SavePresetDialog";
+import PresetList from "@/components/PresetList";
+import TimeWheelPicker from "@/components/TimeWheelPicker";
+import DraggableSettings from "@/components/DraggableTimerContainer";
 
-import {
-  Interval,
-  Unit,
-  UserPreferences,
-  useUserPreferences,
-} from "@/hooks/use-user-preferences";
+// Hooks
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useWorkoutPresets, WorkoutPreset } from "@/hooks/use-workout-presets";
 
 export default function RandomScreen() {
   const theme = useTheme();
@@ -34,13 +41,19 @@ export default function RandomScreen() {
   const { IntervalServiceModule } = NativeModules;
 
   // UI State
-  const [isEditingMinTime, setIsEditingMinTime] = useState(false);
-  const [isEditingMaxTime, setIsEditingMaxTime] = useState(false);
-  const [error, setError] = useState("");
-  const [isSnackbarVisible, setIsSnackbarVisible] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [snackbar, setSnackbar] = useState({
+    visible: false,
+    message: "",
+    isError: false,
+  });
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [isPresetsOpen, setIsPresetsOpen] = useState(true);
+  const sheetHeight = 0.5;
 
-  const sheetHeight = isEditingMinTime || isEditingMaxTime ? 0.7 : 0.4;
-  const { main } = formatDateTimer(timer, false);
+  // presets
+  const { presets, savePreset, deletePreset } = useWorkoutPresets();
+  const randomPresets = presets.filter((p) => p.type === "random");
 
   const { preferences, updatePreference, isLoading } = useUserPreferences();
   const hasPreferences = preferences.hasCompletedSetup;
@@ -53,6 +66,19 @@ export default function RandomScreen() {
 
   const setMaxSecs = (value: number) => {
     updatePreference("random", { ...preferences.random, maxSecs: value });
+  };
+
+  const handleSavePreset = async (name: string) => {
+    await savePreset(name, "random", {
+      minSecs: preferences.random.minSecs,
+      maxSecs: preferences.random.maxSecs,
+    });
+    showSnackbar("Preset saved!");
+  };
+
+  // handle snackbar
+  const showSnackbar = (message: string, isError = false) => {
+    setSnackbar({ visible: true, message, isError });
   };
 
   const getStatus = () => {
@@ -85,11 +111,9 @@ export default function RandomScreen() {
   const currentStatus = getStatus();
 
   const startTimer = () => {
-    console.log("minSecs:", minSecs, "maxSecs:", maxSecs);
     if (minSecs <= 0 || maxSecs <= 0) return;
     if (maxSecs <= minSecs) {
-      setError("Max time must be higher than Min time");
-      setIsSnackbarVisible(true);
+      showSnackbar("Max time must be higher than minimum time!", true);
       return;
     }
     updatePreference("hasCompletedSetup", true);
@@ -184,8 +208,16 @@ export default function RandomScreen() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
+    <GestureHandlerRootView style={layout.GestureRoot}>
+      <View
+        style={{
+          flex: 1,
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          paddingBottom: 40,
+        }}
+      >
         <View style={[layout.mainContainer]}>
           <StatusBadge
             statusLabel={currentStatus.label}
@@ -213,50 +245,100 @@ export default function RandomScreen() {
             thirdButtonLabel="10s"
           />
         </View>
+        <DraggableSettings
+          label="Timer Settings"
+          isTimerRunning={!!timer}
+          maxHeight={sheetHeight}
+          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
+          isOpen={isSettingsOpen}
+        >
+          <View style={[styles.wheelContainer, {}]}>
+            <TimeWheelPicker
+              label="Minimum duration"
+              valueInSeconds={minSecs}
+              onChange={setMinSecs}
+            />
 
-        <ErrorSnackbar
-          visible={isSnackbarVisible}
-          message={error}
-          onDismiss={() => setIsSnackbarVisible(false)}
-          color={theme.colors.error}
-          textColor={theme.colors.onError}
+            <TimeWheelPicker
+              label="Maximum duration"
+              valueInSeconds={maxSecs}
+              onChange={setMaxSecs}
+            />
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              paddingTop: 10,
+            }}
+          >
+            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
+              Save
+            </Button>
+            <Button
+              icon="bookmarks-outline"
+              onPress={() => setIsPresetsOpen(true)}
+            >
+              Load
+            </Button>
+          </View>
+        </DraggableSettings>
+
+        <AppSnackbar
+          visible={snackbar.visible}
+          message={snackbar.message}
+          onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+          color={snackbar.isError ? theme.colors.error : theme.colors.primary}
+          textColor={
+            snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+          }
         />
       </View>
-      {/* Draggable Settings: Just the time input */}
-      <DraggableSettings
-        label="Timer Settings"
-        isTimerRunning={!!timer}
-        maxHeight={sheetHeight}
-        initialOpen={!hasPreferences}
-      >
-        <View style={styles.inputWrapper}>
-          <View style={styles.inputItem}>
-            <TimerInputGroup
-              label="Set Min Duration"
-              initialValueInSeconds={minSecs}
-              isActive={!timer} // Only allow editing if timer isn't running
-              onDurationChange={setMinSecs}
-              onFocusChange={(focused) => setIsEditingMinTime(focused)}
-              size={175}
-            />
-          </View>
-          <View style={styles.inputItem}>
-            <TimerInputGroup
-              label="Set Max Duration"
-              initialValueInSeconds={maxSecs}
-              isActive={!timer} // Only allow editing if timer isn't running
-              onDurationChange={setMaxSecs}
-              onFocusChange={(focused) => setIsEditingMaxTime(focused)}
-              size={175}
-            />
-          </View>
-        </View>
-        {!timer && (
-          <Text style={layout.helperText}>
-            Adjust the min and max times above, then press play to start.
-          </Text>
-        )}
-      </DraggableSettings>
+
+      <Portal>
+        <Modal
+          visible={isPresetsOpen}
+          onDismiss={() => setIsPresetsOpen(false)}
+          contentContainerStyle={{
+            backgroundColor: theme.colors.secondaryContainer,
+            margin: 20,
+            borderRadius: 24,
+            padding: 20,
+          }}
+        >
+          {isPresetsOpen && (
+            <>
+              <View style={styles.inputWrapper}>
+                <IconButton
+                  icon="close"
+                  onPress={() => setIsPresetsOpen(false)}
+                  style={{ position: "absolute", top: -10, right: -10 }}
+                />
+              </View>
+
+              <PresetList
+                presets={presets.filter((p) => p.type === "random")}
+                onLoad={(preset) => {
+                  updatePreference("random", {
+                    minSecs: preset.config.minSecs ?? 60,
+                    maxSecs: preset.config.maxSecs ?? 300,
+                  });
+                  showSnackbar("Preset loaded!");
+                }}
+                onDelete={(id) => {
+                  deletePreset(id);
+                  showSnackbar("Preset deleted!");
+                }}
+              />
+            </>
+          )}
+        </Modal>
+      </Portal>
+      <SavePresetDialog
+        visible={showSaveDialog}
+        onDismiss={() => setShowSaveDialog(false)}
+        onSave={(name) => handleSavePreset(name)}
+      />
     </GestureHandlerRootView>
   );
 }
@@ -264,20 +346,24 @@ export default function RandomScreen() {
 const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    paddingVertical: 76,
-    gap: 76,
+    paddingTop: 76,
   },
   inputWrapper: {
-    marginTop: 20,
-    flexDirection: "row",
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    gap: 20,
+  },
+  inputItem: {
     alignItems: "center",
     width: "100%",
   },
-  inputItem: {
-    flex: 1,
-    alignItems: "center",
+  wheelContainer: {
+    borderRadius: 50,
+    width: "100%",
+    paddingHorizontal: 10,
   },
 });

@@ -310,7 +310,10 @@ class IntervalService : Service() {
             val currentSecond = Math.ceil(remaining.toDouble() / 1000.0).toLong()
 
             if (currentSecond in 1..3 && currentSecond != lastBeepSecond) {
-                ping?.let { if  (!it.isPlaying) it.start()}
+                if (timerType == "interval"){
+                    ping?.let { if  (!it.isPlaying) it.start()}
+                }
+                
                 lastBeepSecond = currentSecond
             }
 
@@ -323,7 +326,9 @@ class IntervalService : Service() {
 
 
             if (remaining <= 0) {
-                beep?.let { if  (!it.isPlaying) it.start()}
+                if (timerType == "interval") {
+                    beep?.let { if (!it.isPlaying) it.start() }
+                }
                 lastBeepSecond = -1L 
                 
                 if (!shouldLoop && currentIndex == intervals.size -1){
@@ -333,6 +338,14 @@ class IntervalService : Service() {
                     handler.postDelayed({  
                         stopSelf()
                     }, 1000)
+                    return
+                }
+
+                if (timerType == "countdown" || timerType == "random") {
+                    isRunning = false
+                    handler.removeCallbacksAndMessages(null)
+                    sendStoppedToJS()
+                    handler.postDelayed({ stopSelf() }, 1000)
                     return
                 }
 
@@ -428,7 +441,7 @@ private fun buildNotification(isPaused: Boolean, remainingMs: Long): Notificatio
     // If you have too many actions, the text disappears. 
     // Show only the Play/Pause button (index 0) in compact view to save space for the timer.
     val style = androidx.media.app.NotificationCompat.MediaStyle()
-        .setShowActionsInCompactView(0,2) // Show buttons in compact view
+        .setShowActionsInCompactView(0,1,2) // Show buttons in compact view
 
     builder.setStyle(style)
 

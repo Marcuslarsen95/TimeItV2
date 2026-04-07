@@ -39,12 +39,12 @@ const ActionButtonsRow = ({
         gap: 24,
         width: "100%",
         borderRadius: 50,
-        borderWidth: 1.5,
+        // borderWidth: 1.5,
         paddingHorizontal: 10,
         paddingVertical: 8,
         overflow: "visible",
-        borderColor: theme.colors.primaryContainer,
-        backgroundColor: theme.colors.primaryContainer + "33",
+        // borderColor: theme.colors.primaryContainer,
+        // backgroundColor: theme.colors.primaryContainer + "16",
       }}
     >
       <View style={{ alignItems: "center" }}>

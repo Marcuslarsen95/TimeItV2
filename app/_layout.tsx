@@ -1,6 +1,10 @@
 import { Stack } from "expo-router";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Platform, Keyboard, Pressable } from "react-native";
+import {
+  GestureHandlerRootView,
+  GestureDetector,
+  Gesture,
+} from "react-native-gesture-handler";
+import { useColorScheme, Platform, Keyboard, View } from "react-native";
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
 import { useMaterial3Theme } from "@pchmn/expo-material3-theme";
 import { useEffect } from "react";
@@ -9,7 +13,6 @@ import * as Notifications from "expo-notifications";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as NavigationBar from "expo-navigation-bar";
-import HeaderMenu from "@/components/HeaderMenu";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -32,23 +35,9 @@ const hideSystemBars = async () => {
   }
 };
 
-const _handleSearch = async () => {
-  {
-    /* insert functionality here */
-  }
-};
-
-const _handleMore = async () => {
-  {
-    /* insert functionality here */
-  }
-};
-
-const _goBack = async () => {
-  {
-    /* insert functionality here */
-  }
-};
+const tapGesture = Gesture.Tap()
+  .runOnJS(true)
+  .onEnd(() => hideSystemBars());
 
 export default function RootLayout() {
   const colorScheme = useColorScheme(); // detects "dark" or "light";
@@ -66,7 +55,7 @@ export default function RootLayout() {
         importance: Notifications.AndroidImportance.HIGH,
         sound: "glass_fixed.wav",
       });
-      NavigationBar.setBehaviorAsync("sticky-immersive" as any);
+      // NavigationBar.setBehaviorAsync("sticky-immersive" as any);
       // Then hide it
       NavigationBar.setVisibilityAsync("hidden");
     }
@@ -82,14 +71,14 @@ export default function RootLayout() {
       : { ...MD3LightTheme, colors: md3Theme.light };
 
   useEffect(() => {
-    NavigationBar.setBackgroundColorAsync("transparent");
+    // NavigationBar.setBackgroundColorAsync("transparent");
     NavigationBar.setButtonStyleAsync(
       colorScheme === "dark" ? "light" : "dark",
     );
   }, [colorScheme]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "transparent" }}>
       <PaperProvider
         theme={theme}
         settings={{ icon: (props) => <Ionicons {...props} /> }}
@@ -98,23 +87,27 @@ export default function RootLayout() {
           colors={[theme.colors.background, theme.colors.primary]}
           start={{ x: 0, y: 1 }}
           end={{ x: 1, y: 0 }}
-          style={{ flex: 1 }}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
           dither={false}
-        >
-          {/* Pressable handles the immersive mode toggle globally */}
-          <Pressable onPress={hideSystemBars} style={{ flex: 1 }} hitSlop={0}>
+        />
+        {/* Pressable handles the immersive mode toggle globally */}
+
+        {/* <Pressable onPress={hideSystemBars} style={{ flex: 1 }} hitSlop={0}> */}
+        <GestureDetector gesture={tapGesture}>
+          <View style={{ flex: 1 }} collapsable={false}>
             <Stack
               screenOptions={{
-                headerShown: false, // We hide the root header because (main) has its own
+                headerShown: false,
                 contentStyle: { backgroundColor: "transparent" },
                 animation: "fade",
               }}
             >
               {/* This points to your (main)/_layout.tsx which has the Burger Menu */}
-              <Stack.Screen name="(main)" />
+              <Stack.Screen name="(tabs)" />
             </Stack>
-          </Pressable>
-        </LinearGradient>
+          </View>
+        </GestureDetector>
+        {/* </Pressable> */}
       </PaperProvider>
     </GestureHandlerRootView>
   );

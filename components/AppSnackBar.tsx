@@ -1,15 +1,15 @@
 import React from "react";
-import { Snackbar, Text } from "react-native-paper";
+import { Snackbar } from "react-native-paper";
 
 interface Props {
   visible: boolean;
   message: string;
   onDismiss: () => void;
-  color: string;
-  textColor: string;
+  color?: string;
+  textColor?: string;
 }
 
-export default function ErrorSnackbar({
+export default function AppSnackbar({
   visible,
   message,
   onDismiss,
@@ -20,10 +20,11 @@ export default function ErrorSnackbar({
     <Snackbar
       visible={visible}
       onDismiss={onDismiss}
+      duration={2000}
       style={{ backgroundColor: color }}
-      wrapperStyle={{}}
+      theme={{ colors: { inverseSurface: textColor } }}
     >
-      <Text style={{ color: textColor }}>{message}</Text>
+      {message}
     </Snackbar>
   );
 }

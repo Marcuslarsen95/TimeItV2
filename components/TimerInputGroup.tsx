@@ -32,7 +32,7 @@ export default function TimerInputGroup({
     const s = (initialValueInSeconds % 60).toString().padStart(2, "0");
     setMins(m);
     setSecs(s);
-  }, [label]);
+  }, [initialValueInSeconds]);
 
   const syncParent = (mStr: string, sStr: string) => {
     const mNum = parseInt(mStr, 10) || 0;

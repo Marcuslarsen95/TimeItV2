@@ -8,10 +8,13 @@ export const layout = StyleSheet.create({
     flex: 1,
     justifyContent: "space-evenly",
     alignItems: "center",
-    paddingHorizontal: 18, // Move the layout padding here
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingHorizontal: 18,
   },
+  GestureRoot: {
+    flex: 1,
+    padding: 40,
+  },
+
   outerContainer: {
     flex: 1,
     justifyContent: "space-between",
@@ -24,10 +27,9 @@ export const layout = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     width: "100%",
-    // Force it to stay wide regardless of content
-    maxWidth: 500, // Optional: keeps it from looking too stretched on tablets
-    minHeight: 400, // Sets a "floor" for the height so it doesn't jump
-    justifyContent: "center", // Spreads content out inside the card
+    maxWidth: 500,
+    minHeight: 400,
+    justifyContent: "center",
   },
 
   buttonContainer: {
@@ -35,9 +37,9 @@ export const layout = StyleSheet.create({
     borderRadius: 15,
     margin: 10,
     alignItems: "center",
-    width: "80%", // Force it to stay wide regardless of content
-    maxWidth: 500, // Optional: keeps it from looking too stretched on tablets
-    justifyContent: "space-between", // Spreads content out inside the card
+    width: "80%",
+    maxWidth: 500,
+    justifyContent: "space-between",
   },
 
   timerSurface: {
@@ -52,10 +54,10 @@ export const layout = StyleSheet.create({
   },
 
   buttonRow: {
-    flexDirection: "row", // Alignment: Horizontal
+    flexDirection: "row",
     justifyContent: "center",
     width: "100%",
-    gap: 10, // Space between buttons
+    gap: 10,
     marginBottom: 10,
   },
 

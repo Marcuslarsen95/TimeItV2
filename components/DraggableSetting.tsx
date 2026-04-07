@@ -34,7 +34,7 @@ export default function DraggableSettings({
 
   // 1. Calculations for the "Floor"
   const PANEL_HEIGHT = SCREEN_HEIGHT * maxHeight;
-  const MIN_VISIBLE_HEIGHT = 60; // Static: Handle + Title + Padding
+  const MIN_VISIBLE_HEIGHT = 120; // Static: Handle + Title + Padding
   const CLOSED_THRESHOLD = PANEL_HEIGHT - MIN_VISIBLE_HEIGHT;
 
   const translateY = useSharedValue(
@@ -108,7 +108,7 @@ export default function DraggableSettings({
           styles.container,
           {
             backgroundColor: theme.colors.secondaryContainer,
-            overflow: "hidden", // Keeps children from bleeding out bottom
+            overflow: "hidden",
           },
           animatedStyle,
         ]}
@@ -128,7 +128,10 @@ export default function DraggableSettings({
 
 const styles = StyleSheet.create({
   container: {
-    position: "relative",
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     marginHorizontal: 10,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,

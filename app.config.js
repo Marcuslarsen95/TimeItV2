@@ -22,6 +22,7 @@ export default {
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.agentperry.TimeItV2",
+      backgroundColor: "transparent",
     },
     androidStatusBar: {
       translucent: true,
@@ -63,6 +64,12 @@ export default {
           behavior: "sticky-immersive",
           visibility: "hidden",
           isTranslucent: true,
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          sounds: ["assets/bedside_alarm.mp3"],
         },
       ],
       "expo-font",
