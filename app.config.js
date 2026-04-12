@@ -8,17 +8,12 @@ export default {
     scheme: "timeitv2",
     userInterfaceStyle: "automatic",
 
-    notification: {
-      icon: "./assets/images/notification_icon.png", // The all-white PNG you made
-      color: "#3892B8", // The color that appears behind the icon in the drawer
-    },
-
     android: {
+      versionCode: 1,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/logo_no_bg_v4.png",
       },
-
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       package: "com.agentperry.TimeItV2",
@@ -61,15 +56,9 @@ export default {
         "expo-navigation-bar",
         {
           appearance: "light",
-          behavior: "sticky-immersive",
+          behavior: "inset-swipe",
           visibility: "hidden",
           isTranslucent: true,
-        },
-      ],
-      [
-        "expo-notifications",
-        {
-          sounds: ["assets/bedside_alarm.mp3"],
         },
       ],
       "expo-font",

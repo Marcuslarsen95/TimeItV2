@@ -180,6 +180,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "100%",
     paddingBottom: 20,
+    paddingHorizontal: 20,
   },
   handleArea: {
     height: COLLAPSED_HEIGHT,

@@ -19,15 +19,11 @@ interface WheelProps {
   onChange: (index: number) => void;
 }
 
-// 1. Memoize the wheel so scrolling one doesn't re-render the others
 const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
   const theme = useTheme();
   const flatListRef = useRef<FlatList>(null);
-
-  // 2. Local state for instant visual feedback (fixes the color flickering)
   const [localIndex, setLocalIndex] = useState(selectedIndex);
 
-  // Sync local state if parent state changes (e.g., reset button)
   useEffect(() => {
     setLocalIndex(selectedIndex);
     flatListRef.current?.scrollToIndex({
@@ -40,7 +36,7 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.round(y / ITEM_HEIGHT);
     if (index >= 0 && index < values.length && index !== localIndex) {
-      setLocalIndex(index); // Update color visually while scrolling
+      setLocalIndex(index);
     }
   };
 
@@ -50,12 +46,24 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.round(y / ITEM_HEIGHT);
     if (index >= 0 && index < values.length) {
-      onChange(index); // Update parent state only when stopped
+      onChange(index);
     }
   };
 
   return (
-    <View style={styles.wheel}>
+    <View style={[styles.wheel, { borderRadius: 10 }]}>
+      <View
+        pointerEvents="none"
+        style={[
+          styles.pill,
+          {
+            top: ITEM_HEIGHT,
+            // backgroundColor: theme.colors.primary,
+            // borderColor: theme.colors.outlineVariant,
+            borderWidth: 0,
+          },
+        ]}
+      />
       <FlatList
         ref={flatListRef}
         data={values}
@@ -65,8 +73,7 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
         decelerationRate="fast"
         onScroll={handleScroll}
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        scrollEventThrottle={16} // Smooth updates
-        // 3. Use Header/Footer instead of empty data strings
+        scrollEventThrottle={16}
         ListHeaderComponent={<View style={{ height: ITEM_HEIGHT }} />}
         ListFooterComponent={<View style={{ height: ITEM_HEIGHT }} />}
         getItemLayout={(_, index) => ({
@@ -76,22 +83,45 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
         })}
         initialScrollIndex={selectedIndex}
         renderItem={({ item, index }) => {
-          const isSelected = index === localIndex;
+          const distance = index - localIndex;
+          const isSelected = distance === 0;
+          const angleDeg = Math.max(-60, Math.min(60, distance * 25));
+          const angleRad = (angleDeg * Math.PI) / 180;
+          const scaleY = Math.cos(angleRad);
+          const opacity = isSelected
+            ? 1
+            : Math.abs(distance) === 1
+              ? 0.4
+              : 0.15;
+
           return (
-            <View style={styles.item}>
+            <View
+              style={[
+                styles.item,
+                {
+                  transform: [
+                    // { perspective: 180 },
+                    // { rotateX: `${angleDeg}deg` },
+                    { scaleY: isSelected ? scaleY : scaleY * 0.8 },
+                    { scaleX: isSelected ? 1 : 0.8 },
+                  ],
+                  backgroundColor: isSelected
+                    ? theme.colors.primary
+                    : theme.colors.secondary + "cc",
+                  borderRadius: 8,
+                  // opacity,
+                },
+              ]}
+            >
               <Text
                 style={[
                   styles.itemText,
                   {
                     color: isSelected
-                      ? theme.colors.primary
-                      : theme.colors.onSurface,
-                    opacity: isSelected ? 1 : 0.3,
-                    fontSize: isSelected ? 28 : 20,
-                    fontWeight: isSelected ? "900" : "400",
-                    backgroundColor: isSelected
-                      ? theme.colors.primary + "16"
-                      : "transparent",
+                      ? theme.colors.onPrimary
+                      : theme.colors.onPrimary,
+                    fontSize: isSelected ? 26 : 18,
+                    fontWeight: isSelected ? "600" : "400",
                   },
                 ]}
               >
@@ -101,21 +131,6 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
           );
         }}
       />
-      {/* Visual selection markers */}
-      <View pointerEvents="none" style={styles.indicatorContainer}>
-        <View
-          style={[
-            styles.selectionLine,
-            { top: ITEM_HEIGHT, borderColor: theme.colors.primary },
-          ]}
-        />
-        <View
-          style={[
-            styles.selectionLine,
-            { top: ITEM_HEIGHT * 2, borderColor: theme.colors.primary },
-          ]}
-        />
-      </View>
     </View>
   );
 });
@@ -137,11 +152,15 @@ export default function TimeWheelPicker({
 }: Props) {
   const theme = useTheme();
 
+  const valueInSecondsRef = useRef(valueInSeconds);
+  useEffect(() => {
+    valueInSecondsRef.current = valueInSeconds;
+  }, [valueInSeconds]);
+
   const hours = Math.floor(valueInSeconds / 3600);
   const minutes = Math.floor((valueInSeconds % 3600) / 60);
   const seconds = valueInSeconds % 60;
 
-  // Memoize arrays so they don't recreate on every render
   const hourValues = React.useMemo(
     () =>
       Array.from({ length: maxHours + 1 }, (_, i) =>
@@ -154,53 +173,73 @@ export default function TimeWheelPicker({
     [],
   );
 
-  // 4. useCallback prevents child wheels from re-rendering when the parent state updates
-  const updateTime = useCallback(
-    (h: number, m: number, s: number) => {
-      onChange(h * 3600 + m * 60 + s);
+  const onHoursChange = useCallback(
+    (newH: number) => {
+      // Use the prop directly. This ensures the calculation always
+      // has the "truth" from the parent state.
+      const m = Math.floor((valueInSeconds % 3600) / 60);
+      const s = valueInSeconds % 60;
+      onChange(newH * 3600 + m * 60 + s);
     },
-    [onChange],
+    [valueInSeconds, onChange], // Add valueInSeconds to dependencies
+  );
+
+  const onMinutesChange = useCallback(
+    (newM: number) => {
+      const h = Math.floor(valueInSeconds / 3600);
+      const s = valueInSeconds % 60;
+      onChange(h * 3600 + newM * 60 + s);
+    },
+    [valueInSeconds, onChange], // Add valueInSeconds to dependencies
+  );
+
+  const onSecondsChange = useCallback(
+    (newS: number) => {
+      const h = Math.floor(valueInSeconds / 3600);
+      const m = Math.floor((valueInSeconds % 3600) / 60);
+      onChange(h * 3600 + m * 60 + newS);
+    },
+    [valueInSeconds, onChange], // Add valueInSeconds to dependencies
   );
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.header]}>{label}</Text>
+      {label && <Text style={styles.header}>{label}</Text>}
       <View style={[styles.wheelsContainer]}>
-        <View style={[styles.wheelContainer]}>
+        <View style={styles.wheelContainer}>
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Hours
           </Text>
           <Wheel
             values={hourValues}
             selectedIndex={hours}
-            onChange={(i) => updateTime(i, minutes, seconds)}
+            onChange={onHoursChange}
           />
         </View>
         <Text style={[styles.separator, { color: theme.colors.primary }]}>
           :
         </Text>
-        <View style={[styles.wheelContainer]}>
+        <View style={styles.wheelContainer}>
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Minutes
           </Text>
           <Wheel
             values={sixtyValues}
             selectedIndex={minutes}
-            onChange={(i) => updateTime(hours, i, seconds)}
+            onChange={onMinutesChange}
           />
         </View>
-
         <Text style={[styles.separator, { color: theme.colors.primary }]}>
           :
         </Text>
-        <View style={[styles.wheelContainer]}>
+        <View style={styles.wheelContainer}>
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Seconds
           </Text>
           <Wheel
             values={sixtyValues}
             selectedIndex={seconds}
-            onChange={(i) => updateTime(hours, minutes, i)}
+            onChange={onSecondsChange}
           />
         </View>
       </View>
@@ -213,7 +252,6 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
   },
   header: {
     fontSize: 16,
@@ -228,6 +266,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    padding: 10,
+    borderRadius: 10,
   },
   wheelContainer: {
     flexDirection: "column",
@@ -244,6 +284,7 @@ const styles = StyleSheet.create({
     width: ITEM_WIDTH,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 4,
   },
   itemText: {
     textAlign: "center",
@@ -253,7 +294,7 @@ const styles = StyleSheet.create({
   separator: {
     fontSize: 24,
     fontWeight: "900",
-    marginHorizontal: 2, // Tighten the space around ":"
+    marginHorizontal: 2,
     paddingTop: 12,
   },
   indicatorContainer: {
@@ -264,5 +305,14 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     borderTopWidth: 1,
+  },
+  pill: {
+    position: "absolute",
+    left: 6,
+    right: 6,
+    height: ITEM_HEIGHT,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    zIndex: 0,
   },
 });

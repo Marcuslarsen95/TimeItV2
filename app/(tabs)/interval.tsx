@@ -1,69 +1,74 @@
-import { View, NativeModules, DeviceEventEmitter } from "react-native";
-import { useTheme, Button } from "react-native-paper";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  StyleSheet,
+  NativeModules,
+  DeviceEventEmitter,
+  Pressable,
+} from "react-native";
+import {
+  useTheme,
+  Button,
+  Modal,
+  Portal,
+  IconButton,
+  SegmentedButtons,
+  Text,
+} from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+
 import { layout } from "@/styles/layout";
 import { formatDateTimer, convertToMs } from "../../utils/HelperFunctions";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
-import React, { useState } from "react";
+import { Interval, useUserPreferences } from "@/hooks/use-user-preferences";
+import { useWorkoutPresets } from "@/hooks/use-workout-presets";
+
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AppSnackbar from "@/components/AppSnackBar";
-import DraggableSettings from "@/components/DraggableSetting";
-import IntervalSegmentPicker from "@/components/IntervalSegmentPicker";
+import DraggableSettings from "@/components/DraggableTimerContainer";
 import SavePresetDialog from "@/components/SavePresetDialog";
 import PresetList from "@/components/PresetList";
+import TimeWheelPicker from "@/components/TimeWheelPicker";
+import TimerInfoBar from "@/components/TimerInfoBar";
 
-import { Interval, useUserPreferences } from "@/hooks/use-user-preferences";
-import { useWorkoutPresets, WorkoutPreset } from "@/hooks/use-workout-presets";
+const { IntervalServiceModule } = NativeModules;
+const SHEET_HEIGHT = 0.45;
+
+type IntervalName = "Active" | "Pause" | "Transition";
 
 export default function IntervalScreen() {
   const theme = useTheme();
-  type IntervalName = "Active" | "Pause" | "Transition";
 
-  interface IntervalUpdateEvent {
-    intervalName: IntervalName;
-    remainingMs: number;
-    timerType: string;
-  }
-
+  // --- State ---
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(true);
+  const [currentInterval, setCurrentInterval] =
+    useState<IntervalName>("Active");
+  const [editingId, setEditingId] = useState(1);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({
     visible: false,
     message: "",
     isError: false,
   });
-  const [isEditingTime, setIsEditingTime] = useState(false);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [currentInterval, setCurrentInterval] =
-    useState<IntervalName>("Active");
-  const progress = useSharedValue(0);
-  const { IntervalServiceModule } = NativeModules;
-  const { main } = formatDateTimer(timer, false);
+
+  // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
-  const intervals = preferences.interval.segments;
-  const [editingId, setEditingId] = useState(1);
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
+  const progress = useSharedValue(0);
+  const counterRef = useRef(0);
+
+  const { main } = formatDateTimer(timer, false);
+  const intervals = preferences.interval.segments;
   const intervalPresets = presets.filter((p) => p.type === "interval");
-  const presetsHeight = intervalPresets.length * 0.07;
-  const sheetHeight = isEditingTime ? 0.8 : 0.5 + presetsHeight;
+  const selectedInterval =
+    intervals.find((i) => i.id === editingId) || intervals[0];
 
-  const setIntervals = (updater: (prev: Interval[]) => Interval[]) => {
-    updatePreference("interval", { segments: updater(intervals) });
-  };
-
-  const showSnackbar = (message: string, isError = false) => {
-    setSnackbar({ visible: true, message, isError });
-  };
-
-  const handleSavePreset = async (name: string) => {
-    await savePreset(name, "interval", {
-      segments: preferences.interval.segments,
-    });
-    showSnackbar("Preset saved!");
-  };
-
+  // --- Derived status ---
   const statusConfig = {
     active: {
       label: "WORK",
@@ -96,38 +101,123 @@ export default function IntervalScreen() {
       statusConfig[key as keyof typeof statusConfig] || statusConfig.active
     );
   };
-
   const currentStatus = getStatus();
 
-  React.useEffect(() => {
-    IntervalServiceModule.getState().then(
-      (state: { isRunning: boolean; isPaused: boolean; timerType: string }) => {
-        if (state.timerType !== "interval") return;
-        if (!state.isRunning) return;
-        if (state.isRunning || !state.isPaused) setIsPaused(state.isPaused);
-      },
-    );
+  // --- Snackbar ---
+  const showSnackbar = (message: string, isError = false) =>
+    setSnackbar({ visible: true, message, isError });
+
+  // --- Interval helpers ---
+  const setIntervals = (updater: (prev: Interval[]) => Interval[]) =>
+    updatePreference("interval", { segments: updater(intervals) });
+
+  // --- Timer controls ---
+  const startInterval = () => {
+    const activeIntervals = intervals.filter((i) => i.active);
+    if (activeIntervals.length === 0) {
+      showSnackbar("Please enable at least one interval.", true);
+      return;
+    }
+    try {
+      setIsPaused(false);
+      setTimer(0);
+      setIsSettingsOpen(false);
+      counterRef.current = 0;
+      IntervalServiceModule.startSequence(
+        JSON.stringify(
+          activeIntervals.map((i) => ({
+            name: i.name,
+            durationMs: convertToMs(i.durationSecs, i.unit),
+          })),
+        ),
+        true,
+        "interval",
+      );
+    } catch (e) {
+      showSnackbar("Failed to start timer, please try again", true);
+    }
+  };
+
+  const togglePause = () => {
+    try {
+      IntervalServiceModule.toggle();
+    } catch (e) {
+      showSnackbar("Failed to pause timer", true);
+    }
+  };
+
+  const stopTimer = () => {
+    try {
+      setIsPaused(true);
+      IntervalServiceModule.stop();
+    } catch (e) {
+      showSnackbar("Failed to stop timer", true);
+    }
+  };
+
+  const pressSkip = () => {
+    try {
+      IntervalServiceModule.skip();
+      setIsPaused(false);
+    } catch (e) {
+      showSnackbar("Failed to skip interval", true);
+    }
+  };
+
+  // --- Presets ---
+  const handleSavePreset = async (name: string) => {
+    await savePreset(name, "interval", {
+      segments: preferences.interval.segments,
+    });
+    showSnackbar("Preset saved!");
+  };
+
+  const openPresets = () => {
+    if (intervalPresets.length < 1) {
+      showSnackbar("You don't have any saved presets", true);
+    } else {
+      setIsPresetsOpen(true);
+    }
+  };
+
+  // --- Effects ---
+  useEffect(() => {
+    IntervalServiceModule.getState()
+      .then(
+        (state: {
+          isRunning: boolean;
+          isPaused: boolean;
+          timerType: string;
+        }) => {
+          if (state.timerType !== "interval" || !state.isRunning) return;
+          setIsPaused(state.isPaused);
+        },
+      )
+      .catch(() => {});
   }, []);
 
-  const counterRef = React.useRef(0);
+  useEffect(() => {
+    interface IntervalUpdateEvent {
+      intervalName: IntervalName;
+      remainingMs: number;
+      timerType: string;
+    }
 
-  React.useEffect(() => {
     const subUpdate = DeviceEventEmitter.addListener(
       "IntervalUpdate",
       (data: IntervalUpdateEvent) => {
         if (data.timerType !== "interval") return;
-        const { intervalName: name, remainingMs } = data;
         setCurrentInterval(data.intervalName);
-        setTimer(remainingMs);
-        const idx = intervals.findIndex((i) => i.name === name);
+        setTimer(data.remainingMs);
+        const idx = intervals.findIndex((i) => i.name === data.intervalName);
         if (idx !== -1) {
           const interval = intervals[idx];
-          const duration = convertToMs(interval.durationSecs, interval.unit);
-          progress.value = remainingMs / duration;
+          progress.value =
+            data.remainingMs /
+            convertToMs(interval.durationSecs, interval.unit);
         }
       },
     );
-
     const subPause = DeviceEventEmitter.addListener(
       "IntervalPaused",
       (data) => {
@@ -135,7 +225,6 @@ export default function IntervalScreen() {
         setIsPaused(true);
       },
     );
-
     const subResume = DeviceEventEmitter.addListener(
       "IntervalResumed",
       (data) => {
@@ -143,7 +232,6 @@ export default function IntervalScreen() {
         setIsPaused(false);
       },
     );
-
     const subStop = DeviceEventEmitter.addListener(
       "IntervalStopped",
       (data) => {
@@ -162,51 +250,11 @@ export default function IntervalScreen() {
     };
   }, []);
 
-  const startInterval = () => {
-    const activeIntervals = intervals.filter((i) => i.active);
-    if (activeIntervals.length === 0) {
-      showSnackbar("Please enable at least one interval.", true);
-      return;
-    }
-    setIsPaused(false);
-    setTimer(0);
-    counterRef.current = 0;
-    IntervalServiceModule.startSequence(
-      JSON.stringify(
-        activeIntervals.map((i) => ({
-          name: i.name,
-          durationMs: convertToMs(i.durationSecs, i.unit),
-        })),
-      ),
-      true,
-      "interval",
-    );
-  };
-
-  const togglePause = () => IntervalServiceModule.toggle();
-  const stopTimer = () => {
-    setIsPaused(true);
-    IntervalServiceModule.stop();
-  };
-  const pressSkip = () => {
-    IntervalServiceModule.skip();
-    setIsPaused(false);
-  };
-
-  const toggleInterval = (id: number) => {
-    setIntervals((prev) =>
-      prev.map((interval) =>
-        interval.id === id
-          ? { ...interval, active: !interval.active }
-          : interval,
-      ),
-    );
-  };
-
+  // --- Render ---
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
-        <View style={[layout.mainContainer]}>
+    <GestureHandlerRootView style={layout.GestureRoot}>
+      <View style={layout.outerContainer}>
+        <View style={layout.mainContainer}>
           <StatusBadge
             statusLabel={currentStatus.label}
             statusColor={currentStatus.color}
@@ -225,53 +273,197 @@ export default function IntervalScreen() {
             thirdButtonIcon="play-skip-forward"
             thirdButtonLabel="Skip"
           />
-          <AppSnackbar
-            visible={snackbar.visible}
-            message={snackbar.message}
-            onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
-            textColor={
-              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
-            }
+          <TimerInfoBar
+            type="interval"
+            segments={intervals}
+            currentInterval={currentInterval}
+            isRunning={!!timer}
           />
         </View>
+
         <DraggableSettings
-          label="Interval Settings"
+          label="Timer Settings"
           isTimerRunning={!!timer}
-          maxHeight={sheetHeight}
+          maxHeight={SHEET_HEIGHT}
+          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
+          isOpen={isSettingsOpen}
         >
-          <IntervalSegmentPicker
-            intervals={intervals}
-            editingId={editingId}
-            setEditingId={setEditingId}
-            onInputFocusChange={(focused) => setIsEditingTime(focused)}
-            onToggle={toggleInterval}
-            onDurationChange={(id, newSeconds) => {
-              setIntervals((prev) =>
-                prev.map((i) =>
-                  i.id === id ? { ...i, durationSecs: newSeconds } : i,
-                ),
-              );
-            }}
+          <SegmentedButtons
+            value={editingId.toString()}
+            onValueChange={(val) => setEditingId(parseInt(val))}
+            buttons={intervals.map((i) => {
+              const isSelected = editingId === i.id;
+              const isActive = i.durationSecs > 0;
+
+              const bgColor = isSelected
+                ? isActive
+                  ? theme.colors.primary
+                  : theme.colors.primaryContainer
+                : isActive
+                  ? theme.colors.secondary
+                  : theme.colors.surfaceDisabled;
+
+              const textColor = isSelected
+                ? isActive
+                  ? theme.colors.onPrimary
+                  : theme.colors.onPrimaryContainer
+                : isActive
+                  ? theme.colors.onSecondary
+                  : theme.colors.onSurfaceDisabled;
+
+              return {
+                value: i.id.toString(),
+                label: i.durationSecs === 0 ? `${i.name} (off)` : i.name,
+                checkedColor: textColor,
+                uncheckedColor: textColor,
+                style: {
+                  borderColor: isSelected
+                    ? theme.colors.primary
+                    : theme.colors.outlineVariant,
+                  borderWidth: isSelected ? 2 : 1,
+                  backgroundColor: bgColor,
+                  opacity: i.active ? 1 : 0.8,
+                },
+                labelStyle: {
+                  fontWeight: isSelected ? "900" : "600",
+                  fontSize: 12,
+                  color: textColor,
+                },
+              };
+            })}
+            style={{ width: "100%", marginBottom: 20 }}
           />
-          <Button onPress={() => setShowSaveDialog(true)}>
-            Save as Preset
-          </Button>
-          <PresetList
-            presets={intervalPresets}
-            onLoad={(preset) => {
-              updatePreference("interval", {
-                segments: preset.config.segments ?? [],
-              });
-              showSnackbar("Preset loaded!");
-            }}
-            onDelete={(id) => {
-              deletePreset(id);
-              showSnackbar("Preset deleted!");
-            }}
-          />
+
+          <View style={{ width: "100%" }}>
+            <View style={{ position: "relative" }}>
+              <View
+                style={{ opacity: selectedInterval.durationSecs > 0 ? 1 : 0.4 }}
+              >
+                <TimeWheelPicker
+                  label="Set intervals"
+                  valueInSeconds={selectedInterval.durationSecs}
+                  onChange={(newSeconds) =>
+                    setIntervals((prev) =>
+                      prev.map((i) =>
+                        i.id === selectedInterval.id
+                          ? { ...i, durationSecs: newSeconds }
+                          : i,
+                      ),
+                    )
+                  }
+                />
+              </View>
+
+              {selectedInterval.durationSecs > 0 ? (
+                <Button
+                  textColor={theme.colors.secondary}
+                  onPress={() =>
+                    setIntervals((prev) =>
+                      prev.map((i) =>
+                        i.id === selectedInterval.id
+                          ? { ...i, durationSecs: 0 }
+                          : i,
+                      ),
+                    )
+                  }
+                >
+                  Disable
+                </Button>
+              ) : (
+                <Pressable
+                  onPress={() =>
+                    setIntervals((prev) =>
+                      prev.map((i) =>
+                        i.id === selectedInterval.id
+                          ? { ...i, durationSecs: 30 }
+                          : i,
+                      ),
+                    )
+                  }
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    right: 0,
+                    top: "50%",
+                    transform: [{ translateY: -20 }],
+                    height: 40,
+                    backgroundColor: theme.colors.surface + "EE",
+                    borderRadius: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.colors.onSurface,
+                      fontSize: 12,
+                      opacity: 0.6,
+                    }}
+                  >
+                    tap to enable
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.presetRow}>
+            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
+              Save Preset
+            </Button>
+            <Button icon="bookmarks-outline" onPress={openPresets}>
+              Load Presets
+            </Button>
+          </View>
         </DraggableSettings>
+
+        <AppSnackbar
+          visible={snackbar.visible}
+          message={snackbar.message}
+          onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+          color={snackbar.isError ? theme.colors.error : theme.colors.primary}
+          textColor={
+            snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+          }
+        />
       </View>
+
+      <Portal>
+        <Modal
+          visible={isPresetsOpen}
+          onDismiss={() => setIsPresetsOpen(false)}
+          contentContainerStyle={[
+            layout.presetModalContainer,
+            { backgroundColor: theme.colors.secondaryContainer },
+          ]}
+        >
+          {isPresetsOpen && (
+            <>
+              <View style={styles.modalHeader}>
+                <IconButton
+                  icon="close"
+                  onPress={() => setIsPresetsOpen(false)}
+                  style={{ position: "absolute", top: -15, right: -20 }}
+                />
+              </View>
+              <PresetList
+                presets={intervalPresets}
+                onLoad={(preset) => {
+                  updatePreference("interval", {
+                    segments: preset.config.segments ?? [],
+                  });
+                  showSnackbar("Preset loaded!");
+                }}
+                onDelete={(id) => {
+                  deletePreset(id);
+                  showSnackbar("Preset deleted!");
+                }}
+              />
+            </>
+          )}
+        </Modal>
+      </Portal>
+
       <SavePresetDialog
         visible={showSaveDialog}
         onDismiss={() => setShowSaveDialog(false)}
@@ -280,3 +472,19 @@ export default function IntervalScreen() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  presetRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingTop: 10,
+    height: 40,
+    width: "100%",
+  },
+  modalHeader: {
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    gap: 20,
+  },
+});

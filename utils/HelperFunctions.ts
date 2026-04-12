@@ -46,3 +46,9 @@ export const getRandomMs = (minMs: number, maxMs: number) => {
 
   return Math.floor(Math.random() * (max - min + 1)) + min;
 };
+
+export const formatShort = (secs: number) => {
+  if (secs >= 60)
+    return `${Math.floor(secs / 60)}m ${secs % 60 > 0 ? `${secs % 60}s` : ""}`.trim();
+  return `${secs}s`;
+};

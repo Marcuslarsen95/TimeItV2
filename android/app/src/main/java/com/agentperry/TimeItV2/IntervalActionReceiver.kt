@@ -13,6 +13,11 @@ class IntervalActionReceiver : BroadcastReceiver() {
             "ACTION_RESUME" -> serviceIntent.putExtra("resume", true)
             "ACTION_STOP" -> serviceIntent.putExtra("stop", true)
             "ACTION_SKIP" -> serviceIntent.putExtra("skip", true)
+            "ACTION_STOP_ALARM" -> {
+                serviceIntent.action = "ACTION_STOP_ALARM"
+                context.startService(serviceIntent)
+                return  
+            }
         }
 
         context.startService(serviceIntent)

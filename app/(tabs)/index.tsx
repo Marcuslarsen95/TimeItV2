@@ -1,67 +1,61 @@
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
   NativeModules,
   DeviceEventEmitter,
 } from "react-native";
-import { useTheme, Text, Button } from "react-native-paper";
-import { layout } from "../../styles/layout";
-import React, { useState, useEffect } from "react";
-import { formatDateTimer } from "../../utils/HelperFunctions";
+import {
+  useTheme,
+  Button,
+  Portal,
+  Modal,
+  IconButton,
+} from "react-native-paper";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import * as Notifications from "expo-notifications";
+
+import { layout } from "../../styles/layout";
+import { formatDateTimer } from "../../utils/HelperFunctions";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useWorkoutPresets } from "@/hooks/use-workout-presets";
+
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AppSnackbar from "@/components/AppSnackBar";
 import DraggableSettings from "@/components/DraggableTimerContainer";
-import TimerInputGroup from "@/components/TimerInputGroup";
-import SavePresetDialog from "@/components/SavePresetDialog";
 import PresetList from "@/components/PresetList";
+import SavePresetDialog from "@/components/SavePresetDialog";
+import TimerInfoBar from "@/components/TimerInfoBar";
 import TimeWheelPicker from "@/components/TimeWheelPicker";
 
-// Hooks
-import { useUserPreferences } from "@/hooks/use-user-preferences";
-import { useWorkoutPresets, WorkoutPreset } from "@/hooks/use-workout-presets";
+const { IntervalServiceModule } = NativeModules;
+const SHEET_HEIGHT = 0.35;
 
 export default function SimpleTimer() {
   const theme = useTheme();
+
+  // --- State ---
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(true);
   const [inputTimeSecs, setInputTimeSecs] = useState(60);
-  const { IntervalServiceModule } = NativeModules;
-
-  // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({
     visible: false,
     message: "",
     isError: false,
   });
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [isPresetsOpen, setIsPresetsOpen] = useState(true);
-  const sheetHeight = 0.35;
 
-  // presets
+  // --- Hooks ---
+  const { preferences, updatePreference } = useUserPreferences();
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
-  const randomPresets = presets.filter((p) => p.type === "random");
-
-  const { preferences, updatePreference, isLoading } = useUserPreferences();
-  const hasPreferences = preferences.hasCompletedSetup;
 
   const { main } = formatDateTimer(timer, false);
   const countdownPresets = presets.filter((p) => p.type === "countdown");
-  const presetsHeight = countdownPresets.length * 0.07;
 
-  const showSnackbar = (message: string, isError = false) => {
-    setSnackbar({ visible: true, message, isError });
-  };
-
-  const handleSavePreset = async (name: string) => {
-    await savePreset(name, "countdown", { duration: inputTimeSecs });
-    showSnackbar("Preset saved!");
-  };
-
+  // --- Derived status ---
   const getStatus = () => {
     if (timer === 0)
       return {
@@ -81,54 +75,86 @@ export default function SimpleTimer() {
       icon: "timer-outline",
     };
   };
-
   const currentStatus = getStatus();
 
-  const scheduleAlarmNotification = async (durationMs: number) => {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Time's up!",
-        body: "Your timer has finished.",
-        sound: "bedside_alarm.mp3",
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: durationMs / 1000,
-        channelId: "alarm",
-      },
-    });
-  };
+  // --- Snackbar ---
+  const showSnackbar = (message: string, isError = false) =>
+    setSnackbar({ visible: true, message, isError });
 
+  // --- Timer controls ---
   const startTimer = () => {
     if (inputTimeSecs <= 0) {
       showSnackbar("Please input a timer", true);
       return;
     }
-    setIsPaused(false);
-    scheduleAlarmNotification(inputTimeSecs * 1000);
-    IntervalServiceModule.startSequence(
-      JSON.stringify([{ name: "Countdown", durationMs: inputTimeSecs * 1000 }]),
-      false,
-      "countdown",
-    );
+    try {
+      setIsSettingsOpen(false);
+      setIsPaused(false);
+      IntervalServiceModule.startSequence(
+        JSON.stringify([
+          { name: "Countdown", durationMs: inputTimeSecs * 1000 },
+        ]),
+        false,
+        "countdown",
+      );
+    } catch (e) {
+      showSnackbar("Failed to start timer, please try again", true);
+    }
   };
 
-  const togglePause = () => IntervalServiceModule.toggle();
+  const togglePause = () => {
+    try {
+      IntervalServiceModule.toggle();
+    } catch (e) {
+      showSnackbar("Failed to pause timer", true);
+    }
+  };
+
   const stopTimer = () => {
-    setIsPaused(true);
-    IntervalServiceModule.stop();
+    try {
+      setIsPaused(true);
+      IntervalServiceModule.stop();
+    } catch (e) {
+      showSnackbar("Failed to stop timer", true);
+    }
   };
-  const skipForward = () => IntervalServiceModule.skipForward(10000);
 
-  React.useEffect(() => {
-    IntervalServiceModule.getState().then(
-      (state: { isRunning: boolean; isPaused: boolean; timerType: string }) => {
-        if (state.timerType !== "countdown") return;
-        if (!state.isRunning) return;
-        if (state.isRunning || !state.isPaused) setIsPaused(state.isPaused);
-      },
-    );
+  const skipForward = () => {
+    try {
+      IntervalServiceModule.skipForward(10000);
+    } catch (e) {
+      showSnackbar("Failed to skip forward", true);
+    }
+  };
+
+  // --- Presets ---
+  const handleSavePreset = async (name: string) => {
+    await savePreset(name, "countdown", { duration: inputTimeSecs });
+    showSnackbar("Preset saved!");
+  };
+
+  const openPresets = () => {
+    if (countdownPresets.length < 1) {
+      showSnackbar("You don't have any saved presets", true);
+    } else {
+      setIsPresetsOpen(true);
+    }
+  };
+
+  // --- Effects ---
+  useEffect(() => {
+    IntervalServiceModule.getState()
+      .then(
+        (state: {
+          isRunning: boolean;
+          isPaused: boolean;
+          timerType: string;
+        }) => {
+          if (state.timerType !== "countdown" || !state.isRunning) return;
+          setIsPaused(state.isPaused);
+        },
+      )
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -161,6 +187,7 @@ export default function SimpleTimer() {
         setTimer(0);
       },
     );
+
     return () => {
       subUpdate.remove();
       subPause.remove();
@@ -169,18 +196,11 @@ export default function SimpleTimer() {
     };
   }, []);
 
+  // --- Render ---
   return (
     <GestureHandlerRootView style={layout.GestureRoot}>
-      <View
-        style={{
-          flex: 1,
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          paddingBottom: 40,
-        }}
-      >
-        <View style={[layout.mainContainer]}>
+      <View style={layout.outerContainer}>
+        <View style={layout.mainContainer}>
           <StatusBadge
             statusLabel={currentStatus.label}
             statusColor={currentStatus.color}
@@ -199,7 +219,33 @@ export default function SimpleTimer() {
             thirdButtonIcon="play-forward"
             thirdButtonLabel="10s"
           />
+          <TimerInfoBar type="countdown" durationSecs={inputTimeSecs} />
         </View>
+
+        <DraggableSettings
+          label="Timer Settings"
+          isTimerRunning={!!timer}
+          maxHeight={SHEET_HEIGHT}
+          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
+          isOpen={isSettingsOpen}
+        >
+          <View style={styles.wheelContainer}>
+            <TimeWheelPicker
+              label="Set timer duration"
+              valueInSeconds={inputTimeSecs}
+              onChange={setInputTimeSecs}
+            />
+          </View>
+          <View style={styles.presetRow}>
+            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
+              Save Preset
+            </Button>
+            <Button icon="bookmarks-outline" onPress={openPresets}>
+              Load Presets
+            </Button>
+          </View>
+        </DraggableSettings>
+
         <AppSnackbar
           visible={snackbar.visible}
           message={snackbar.message}
@@ -209,86 +255,71 @@ export default function SimpleTimer() {
             snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
           }
         />
-        <DraggableSettings
-          label="Timer Settings"
-          isTimerRunning={!!timer}
-          maxHeight={sheetHeight}
-          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
-          isOpen={isSettingsOpen}
-        >
-          <View style={[styles.wheelContainer, {}]}>
-            <TimeWheelPicker
-              label="Minimum duration"
-              valueInSeconds={inputTimeSecs}
-              onChange={(newSecs) => setInputTimeSecs(newSecs)}
-            />
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              paddingTop: 10,
-            }}
-          >
-            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save
-            </Button>
-            <Button
-              icon="bookmarks-outline"
-              onPress={() => setIsPresetsOpen(true)}
-            >
-              Load
-            </Button>
-          </View>
-        </DraggableSettings>
       </View>
 
-      {/* <DraggableSettings
-        label="Timer Settings"
-        isTimerRunning={!!timer}
-        maxHeight={sheetHeight}
-      >
-        <View style={styles.inputWrapper}>
-          <TimerInputGroup
-            label="Set Duration"
-            initialValueInSeconds={inputTimeSecs}
-            isActive={!timer}
-            onDurationChange={(newSecs) => setInputTimeSecs(newSecs)}
-            onFocusChange={(focused) => setIsEditingTime(focused)}
-          />
-          {!timer && (
-            <Text style={layout.helperText}>
-              Adjust the time above, then press play to start.
-            </Text>
+      <Portal>
+        <Modal
+          visible={isPresetsOpen}
+          onDismiss={() => setIsPresetsOpen(false)}
+          contentContainerStyle={[
+            layout.presetModalContainer,
+            { backgroundColor: theme.colors.secondaryContainer },
+          ]}
+        >
+          {isPresetsOpen && (
+            <>
+              <View style={styles.modalHeader}>
+                <IconButton
+                  icon="close"
+                  onPress={() => setIsPresetsOpen(false)}
+                  style={{ position: "absolute", top: -15, right: -20 }}
+                />
+              </View>
+              <PresetList
+                presets={countdownPresets}
+                onLoad={(preset) => {
+                  const newDuration = preset.config.duration ?? 60;
+                  setInputTimeSecs(newDuration);
+                  updatePreference("countdown", { duration: newDuration });
+                  setIsPresetsOpen(false);
+                  showSnackbar("Preset loaded!");
+                }}
+                onDelete={(id) => {
+                  deletePreset(id);
+                  showSnackbar("Preset deleted!");
+                }}
+              />
+            </>
           )}
-        </View>
-        <Button onPress={() => setShowSaveDialog(true)}>Save as Preset</Button>
-        <PresetList
-          presets={countdownPresets}
-          onLoad={(preset) => {
-            setInputTimeSecs(preset.config.duration ?? 60);
-            showSnackbar("Preset loaded!");
-          }}
-          onDelete={(id) => {
-            deletePreset(id);
-            showSnackbar("Preset deleted!");
-          }}
-        />
-      </DraggableSettings>
+        </Modal>
+      </Portal>
+
       <SavePresetDialog
         visible={showSaveDialog}
         onDismiss={() => setShowSaveDialog(false)}
         onSave={handleSavePreset}
-      /> */}
+      />
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  inputWrapper: { marginTop: 20, alignItems: "center", width: "100%" },
   wheelContainer: {
     borderRadius: 50,
     width: "100%",
     paddingHorizontal: 10,
+  },
+  presetRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingTop: 10,
+    height: 40,
+    width: "100%",
+  },
+  modalHeader: {
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    gap: 20,
   },
 });

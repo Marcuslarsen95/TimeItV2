@@ -30,13 +30,13 @@ class IntervalService : Service() {
         var isRunning: Boolean = false
         var isPaused: Boolean = true
         var timerType: String = "interval"
+        var remainingBeforePause: Long = 0L
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private var intervals: List<NativeInterval> = emptyList()
     private var currentIndex = 0
     private var intervalStartTime = 0L
-    private var remainingBeforePause = 0L
     private var lastNotificationUpdateTime = 0L
     private var beep: MediaPlayer? = null
     private var ping: MediaPlayer? = null
@@ -90,6 +90,7 @@ class IntervalService : Service() {
         }
     }
 
+
     // 2. HANDLE ACTIONS (Notification / Receiver)
     when (intent.action) {
         "ACTION_PAUSE" -> {
@@ -103,6 +104,15 @@ class IntervalService : Service() {
         "ACTION_STOP" -> {
             resetEngine()
             sendStoppedToJS()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        "ACTION_STOP_ALARM" -> {
+            alarmPlayer?.stop()
+            alarmPlayer?.release()
+            alarmPlayer = null
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.cancel(2)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -138,6 +148,88 @@ class IntervalService : Service() {
 
     return START_STICKY
 }
+
+    private fun sendAlarmNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            
+            val channel = NotificationChannel(
+                "alarm_channel",
+                "Alarm",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                setSound(
+                    android.net.Uri.parse("android.resource://$packageName/${R.raw.bedside_alarm}"),
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true)
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+            Log.d("AlarmNotif", "Channel created")
+        }
+
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val contentPendingIntent = PendingIntent.getActivity(
+            this, 0, launchIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val stopIntent = Intent(this, IntervalActionReceiver::class.java).apply {
+            action = "ACTION_STOP_ALARM"
+        }
+        val stopPending = PendingIntent.getBroadcast(
+            this, 10, stopIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val deleteIntent = Intent(this, IntervalActionReceiver::class.java).apply {
+            action = "ACTION_STOP_ALARM"
+        }
+        val deletePending = PendingIntent.getBroadcast(
+            this, 11, deleteIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, "alarm_channel")
+            .setContentTitle("Time's up!")
+            .setContentText("Your timer has finished.")
+            .setSmallIcon(R.drawable.notification_icon)
+            .setContentIntent(stopPending)
+            .setDeleteIntent(deletePending)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(R.drawable.stop_sharp_white, "Stop", stopPending)  // ← add this
+            .build()
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(2, notification)
+    }
+
+    private var alarmPlayer: MediaPlayer? = null
+
+    private fun playAlarmSound() {
+        alarmPlayer = MediaPlayer().apply {
+            setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            setDataSource(
+                applicationContext,
+                android.net.Uri.parse("android.resource://$packageName/${R.raw.bedside_alarm}")
+            )
+            isLooping = true
+            prepare()
+            start()
+        }
+    }
+
 
 
     private fun pauseEngine() {
@@ -331,23 +423,20 @@ class IntervalService : Service() {
                 }
                 lastBeepSecond = -1L 
                 
-                if (!shouldLoop && currentIndex == intervals.size -1){
+                if (!shouldLoop && currentIndex == intervals.size - 1) {
                     isRunning = false
                     handler.removeCallbacksAndMessages(null)
                     sendStoppedToJS()
-                    handler.postDelayed({  
-                        stopSelf()
-                    }, 1000)
+                    if (timerType == "countdown" || timerType == "random") {
+                        sendAlarmNotification()
+                        playAlarmSound()
+                    } else {
+                        handler.postDelayed({ stopSelf() }, 1000)
+                    }
                     return
                 }
 
-                if (timerType == "countdown" || timerType == "random") {
-                    isRunning = false
-                    handler.removeCallbacksAndMessages(null)
-                    sendStoppedToJS()
-                    handler.postDelayed({ stopSelf() }, 1000)
-                    return
-                }
+                
 
                 currentIndex = (currentIndex + 1) % intervals.size
                 intervalStartTime = System.currentTimeMillis()
@@ -467,6 +556,7 @@ private fun formatTime(ms: Long): String {
         handler.removeCallbacksAndMessages(null)
         beep?.release()
         ping?.release()
+        alarmPlayer?.release()
         super.onDestroy()
     }
 

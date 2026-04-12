@@ -43,8 +43,6 @@ const ActionButtonsRow = ({
         paddingHorizontal: 10,
         paddingVertical: 8,
         overflow: "visible",
-        // borderColor: theme.colors.primaryContainer,
-        // backgroundColor: theme.colors.primaryContainer + "16",
       }}
     >
       <View style={{ alignItems: "center" }}>
@@ -65,7 +63,13 @@ const ActionButtonsRow = ({
         icon={isPaused ? "play" : "pause"}
         mode="outlined"
         size={64}
-        onPress={timerActive ? pressPause : pressPlay}
+        onPress={() => {
+          if (timerActive) {
+            pressPause();
+          } else {
+            pressPlay();
+          }
+        }}
         iconColor={theme.colors.primary}
         style={{ borderWidth: 0 }}
       />

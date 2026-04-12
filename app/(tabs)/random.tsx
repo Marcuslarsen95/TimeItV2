@@ -1,24 +1,23 @@
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
   NativeModules,
   DeviceEventEmitter,
-  Animated,
 } from "react-native";
 import {
   useTheme,
-  Text,
   IconButton,
   Button,
   Portal,
   Modal,
 } from "react-native-paper";
-import { layout } from "../../styles/layout";
-import React, { useState, useEffect, useRef } from "react";
-import { getRandomMs } from "../../utils/HelperFunctions";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { layout } from "../../styles/layout";
+import { getRandomMs } from "../../utils/HelperFunctions";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useWorkoutPresets } from "@/hooks/use-workout-presets";
 
-// Shared components
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
@@ -27,137 +26,142 @@ import SavePresetDialog from "@/components/SavePresetDialog";
 import PresetList from "@/components/PresetList";
 import TimeWheelPicker from "@/components/TimeWheelPicker";
 import DraggableSettings from "@/components/DraggableTimerContainer";
+import TimerInfoBar from "@/components/TimerInfoBar";
 
-// Hooks
-import { useUserPreferences } from "@/hooks/use-user-preferences";
-import { useWorkoutPresets, WorkoutPreset } from "@/hooks/use-workout-presets";
+const { IntervalServiceModule } = NativeModules;
+const SHEET_HEIGHT = 0.5;
 
 export default function RandomScreen() {
   const theme = useTheme();
 
-  // Timer State
+  // --- State ---
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(true);
-  const { IntervalServiceModule } = NativeModules;
-
-  // UI State
-  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPresetsOpen, setIsPresetsOpen] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({
     visible: false,
     message: "",
     isError: false,
   });
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [isPresetsOpen, setIsPresetsOpen] = useState(true);
-  const sheetHeight = 0.5;
 
-  // presets
+  // --- Hooks ---
+  const { preferences, updatePreference } = useUserPreferences();
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
+
+  const { minSecs, maxSecs } = preferences.random;
   const randomPresets = presets.filter((p) => p.type === "random");
 
-  const { preferences, updatePreference, isLoading } = useUserPreferences();
-  const hasPreferences = preferences.hasCompletedSetup;
-  const minSecs = preferences.random.minSecs;
-  const maxSecs = preferences.random.maxSecs;
-
-  const setMinSecs = (value: number) => {
-    updatePreference("random", { ...preferences.random, minSecs: value });
-  };
-
-  const setMaxSecs = (value: number) => {
-    updatePreference("random", { ...preferences.random, maxSecs: value });
-  };
-
-  const handleSavePreset = async (name: string) => {
-    await savePreset(name, "random", {
-      minSecs: preferences.random.minSecs,
-      maxSecs: preferences.random.maxSecs,
-    });
-    showSnackbar("Preset saved!");
-  };
-
-  // handle snackbar
-  const showSnackbar = (message: string, isError = false) => {
-    setSnackbar({ visible: true, message, isError });
-  };
-
+  // --- Derived status ---
   const getStatus = () => {
-    // 1. Initial State (Timer is 0 and we haven't started)
-    if (timer === 0) {
+    if (timer === 0)
       return {
         label: "READY",
         color: theme.colors.secondary,
         icon: "play-circle-outline",
       };
-    }
-
-    // 2. User hit pause while it was running
-    if (isPaused) {
+    if (isPaused)
       return {
         label: "PAUSED",
         color: theme.colors.outline,
         icon: "pause-circle",
       };
-    }
-
-    // 3. Active Countdown
     return {
       label: "RUNNING",
       color: theme.colors.primary,
       icon: "timer-outline",
     };
   };
-
   const currentStatus = getStatus();
 
+  // --- Preference helpers ---
+  const setMinSecs = (value: number) =>
+    updatePreference("random", { ...preferences.random, minSecs: value });
+
+  const setMaxSecs = (value: number) =>
+    updatePreference("random", { ...preferences.random, maxSecs: value });
+
+  // --- Snackbar ---
+  const showSnackbar = (message: string, isError = false) =>
+    setSnackbar({ visible: true, message, isError });
+
+  // --- Timer controls ---
   const startTimer = () => {
     if (minSecs <= 0 || maxSecs <= 0) return;
     if (maxSecs <= minSecs) {
       showSnackbar("Max time must be higher than minimum time!", true);
       return;
     }
-    updatePreference("hasCompletedSetup", true);
-    const minMs = minSecs * 1000;
-    const maxMs = maxSecs * 1000;
-    setIsPaused(false);
+    try {
+      updatePreference("hasCompletedSetup", true);
+      setIsPaused(false);
+      setIsSettingsOpen(false);
+      const randomTime = getRandomMs(minSecs * 1000, maxSecs * 1000);
+      IntervalServiceModule.startSequence(
+        JSON.stringify([{ name: "Random", durationMs: randomTime }]),
+        false,
+        "random",
+      );
+    } catch (e) {
+      showSnackbar("Failed to start timer, please try again", true);
+    }
+  };
 
-    const randomTime = getRandomMs(minMs, maxMs);
+  const togglePause = () => {
+    try {
+      IntervalServiceModule.toggle();
+    } catch (e) {
+      showSnackbar("Failed to pause timer", true);
+    }
+  };
 
-    // Treat this as a single-item interval list
-    const singleInterval = [
-      {
-        name: "Random",
-        durationMs: randomTime,
-      },
-    ];
-
-    IntervalServiceModule.startSequence(
-      JSON.stringify(singleInterval),
-      false,
-      "random",
-    );
+  const stopTimer = () => {
+    try {
+      setIsPaused(true);
+      IntervalServiceModule.stop();
+    } catch (e) {
+      showSnackbar("Failed to stop timer", true);
+    }
   };
 
   const skipForward = () => {
-    IntervalServiceModule.skipForward(10000);
+    try {
+      IntervalServiceModule.skipForward(10000);
+    } catch (e) {
+      showSnackbar("Failed to skip forward", true);
+    }
   };
 
-  // Replace togglePause with this:
-  const togglePause = () => {
-    IntervalServiceModule.toggle();
-    // The listener below will update the isPaused state
+  // --- Presets ---
+  const handleSavePreset = async (name: string) => {
+    await savePreset(name, "random", { minSecs, maxSecs });
+    setIsPresetsOpen(false);
+    showSnackbar("Preset saved!");
   };
 
-  React.useEffect(() => {
-    IntervalServiceModule.getState().then(
-      (state: { isRunning: boolean; isPaused: boolean; timerType: string }) => {
-        if (state.timerType !== "random") return; // not our timer
-        if (!state.isRunning) return;
-        if (state.isRunning || !state.isPaused) {
+  const openPresets = () => {
+    if (randomPresets.length < 1) {
+      showSnackbar("You don't have any saved presets", true);
+    } else {
+      setIsPresetsOpen(true);
+    }
+  };
+
+  // --- Effects ---
+  useEffect(() => {
+    IntervalServiceModule.getState()
+      .then(
+        (state: {
+          isRunning: boolean;
+          isPaused: boolean;
+          timerType: string;
+        }) => {
+          if (state.timerType !== "random" || !state.isRunning) return;
           setIsPaused(state.isPaused);
-        }
-      },
-    );
+        },
+      )
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -168,7 +172,6 @@ export default function RandomScreen() {
         setTimer(data.remainingMs);
       },
     );
-
     const subPause = DeviceEventEmitter.addListener(
       "IntervalPaused",
       (data) => {
@@ -176,7 +179,6 @@ export default function RandomScreen() {
         setIsPaused(true);
       },
     );
-
     const subResume = DeviceEventEmitter.addListener(
       "IntervalResumed",
       (data) => {
@@ -184,7 +186,6 @@ export default function RandomScreen() {
         setIsPaused(false);
       },
     );
-
     const subStop = DeviceEventEmitter.addListener(
       "IntervalStopped",
       (data) => {
@@ -202,36 +203,22 @@ export default function RandomScreen() {
     };
   }, []);
 
-  const stopTimer = async () => {
-    setIsPaused(true);
-    IntervalServiceModule.stop();
-  };
-
+  // --- Render ---
   return (
     <GestureHandlerRootView style={layout.GestureRoot}>
-      <View
-        style={{
-          flex: 1,
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          paddingBottom: 40,
-        }}
-      >
-        <View style={[layout.mainContainer]}>
+      <View style={layout.outerContainer}>
+        <View style={layout.mainContainer}>
           <StatusBadge
             statusLabel={currentStatus.label}
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-
           <TimerDisplay
-            time={"??:??"}
+            time="??:??"
             isPaused={isPaused}
             isRunning={!!timer}
             isRandom={true}
           />
-
           <ActionButtonsRow
             timerActive={timer > 0}
             isPaused={isPaused}
@@ -244,42 +231,34 @@ export default function RandomScreen() {
             thirdButtonIcon="play-forward"
             thirdButtonLabel="10s"
           />
+          <TimerInfoBar type="random" minSecs={minSecs} maxSecs={maxSecs} />
         </View>
+
         <DraggableSettings
           label="Timer Settings"
           isTimerRunning={!!timer}
-          maxHeight={sheetHeight}
+          maxHeight={SHEET_HEIGHT}
           onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
           isOpen={isSettingsOpen}
         >
-          <View style={[styles.wheelContainer, {}]}>
+          <View style={styles.wheelContainer}>
             <TimeWheelPicker
               label="Minimum duration"
               valueInSeconds={minSecs}
               onChange={setMinSecs}
             />
-
             <TimeWheelPicker
               label="Maximum duration"
               valueInSeconds={maxSecs}
               onChange={setMaxSecs}
             />
           </View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              paddingTop: 10,
-            }}
-          >
+          <View style={styles.presetRow}>
             <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save
+              Save Preset
             </Button>
-            <Button
-              icon="bookmarks-outline"
-              onPress={() => setIsPresetsOpen(true)}
-            >
-              Load
+            <Button icon="bookmarks-outline" onPress={openPresets}>
+              Load Presets
             </Button>
           </View>
         </DraggableSettings>
@@ -299,71 +278,67 @@ export default function RandomScreen() {
         <Modal
           visible={isPresetsOpen}
           onDismiss={() => setIsPresetsOpen(false)}
-          contentContainerStyle={{
-            backgroundColor: theme.colors.secondaryContainer,
-            margin: 20,
-            borderRadius: 24,
-            padding: 20,
-          }}
+          contentContainerStyle={[
+            layout.presetModalContainer,
+            { backgroundColor: theme.colors.secondaryContainer },
+          ]}
         >
           {isPresetsOpen && (
             <>
-              <View style={styles.inputWrapper}>
+              <View style={styles.modalHeader}>
                 <IconButton
                   icon="close"
                   onPress={() => setIsPresetsOpen(false)}
-                  style={{ position: "absolute", top: -10, right: -10 }}
+                  style={{ position: "absolute", top: -15, right: -20 }}
                 />
               </View>
-
               <PresetList
-                presets={presets.filter((p) => p.type === "random")}
+                presets={randomPresets}
                 onLoad={(preset) => {
                   updatePreference("random", {
                     minSecs: preset.config.minSecs ?? 60,
                     maxSecs: preset.config.maxSecs ?? 300,
                   });
+                  setIsPresetsOpen(false);
                   showSnackbar("Preset loaded!");
                 }}
                 onDelete={(id) => {
                   deletePreset(id);
                   showSnackbar("Preset deleted!");
+                  if (randomPresets.length < 1) setIsPresetsOpen(false);
                 }}
               />
             </>
           )}
         </Modal>
       </Portal>
+
       <SavePresetDialog
         visible={showSaveDialog}
         onDismiss={() => setShowSaveDialog(false)}
-        onSave={(name) => handleSavePreset(name)}
+        onSave={handleSavePreset}
       />
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  mainContent: {
-    flex: 1,
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    paddingTop: 76,
-  },
-  inputWrapper: {
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    gap: 20,
-  },
-  inputItem: {
-    alignItems: "center",
-    width: "100%",
-  },
   wheelContainer: {
     borderRadius: 50,
     width: "100%",
     paddingHorizontal: 10,
+  },
+  presetRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    paddingTop: 10,
+    height: 40,
+    width: "100%",
+  },
+  modalHeader: {
+    flexDirection: "column",
+    alignItems: "center",
+    width: "100%",
+    gap: 20,
   },
 });

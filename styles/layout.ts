@@ -4,23 +4,24 @@ export const layout = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  GestureRoot: {
+    flex: 1,
+    padding: 40,
+  },
   mainContainer: {
     flex: 1,
     justifyContent: "space-evenly",
     alignItems: "center",
     paddingHorizontal: 18,
   },
-  GestureRoot: {
-    flex: 1,
-    padding: 40,
-  },
-
   outerContainer: {
     flex: 1,
     justifyContent: "space-between",
     alignItems: "center",
     gap: 18,
     paddingHorizontal: 18,
+    paddingBottom: 40,
+    paddingTop: 40,
   },
   container: {
     borderRadius: 15,
@@ -89,6 +90,13 @@ export const layout = StyleSheet.create({
     justifyContent: "center",
   },
 
+  presetModalContainer: {
+    margin: 20,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
   // text styling
 
   helperText: {

@@ -1,7 +1,13 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { SegmentedButtons, useTheme, Text, Switch } from "react-native-paper";
-import TimerInputGroup from "./TimerInputGroup";
+import {
+  SegmentedButtons,
+  useTheme,
+  Text,
+  Button,
+  Switch,
+} from "react-native-paper";
+import TimeWheelPicker from "@/components/TimeWheelPicker";
 
 interface Interval {
   id: number;
@@ -113,14 +119,12 @@ export default function IntervalSegmentPicker({
           { opacity: selectedInterval.active ? 1 : 0.4 },
         ]}
       >
-        <TimerInputGroup
-          label={`Set ${selectedInterval.name} Time`}
-          initialValueInSeconds={selectedInterval.durationSecs}
-          isActive={selectedInterval.active}
-          onDurationChange={(newSeconds: number) =>
-            onDurationChange(editingId, newSeconds)
+        <TimeWheelPicker
+          label={`${selectedInterval.name} duration`}
+          valueInSeconds={selectedInterval.durationSecs}
+          onChange={(newSeconds) =>
+            onDurationChange(selectedInterval.id, newSeconds)
           }
-          onFocusChange={onInputFocusChange}
         />
       </View>
     </View>
@@ -152,5 +156,11 @@ const styles = StyleSheet.create({
   inputContainer: {
     width: "100%",
     alignItems: "center",
+  },
+  inputWrapper: { marginTop: 20, alignItems: "center", width: "100%" },
+  wheelContainer: {
+    borderRadius: 50,
+    width: "100%",
+    paddingHorizontal: 10,
   },
 });

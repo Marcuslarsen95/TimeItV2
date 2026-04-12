@@ -92,6 +92,7 @@ class IntervalModule(reactContext: ReactApplicationContext) :
         map.putBoolean("isRunning", IntervalService.isRunning)
         map.putBoolean("isPaused", IntervalService.isPaused)
         map.putString("timerType", IntervalService.timerType)
+        map.putDouble("remainingMs", IntervalService.remainingBeforePause.toDouble())
         promise.resolve(map)
     }
 
