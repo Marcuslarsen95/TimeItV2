@@ -1,3 +1,4 @@
+import { WorkoutPreset } from "@/hooks/use-workout-presets";
 type Unit = "Seconds" | "Minutes" | "Hours";
 
 const pad = (num: number, length: number) => {
@@ -9,12 +10,14 @@ const pad = (num: number, length: number) => {
 export const formatDateTimer = (totalMills: number, showMills: boolean) => {
   const safeMs = Math.max(0, totalMills);
 
-  const totalSeconds = Math.ceil(safeMs / 1000);
+  const totalSeconds = Math.floor(safeMs / 1000); // floor, not ceil
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
+  const centiseconds = Math.floor((safeMs % 1000) / 10);
 
   const main = `${pad(minutes, 2)}:${pad(seconds, 2)}`;
-  return { main, ms: "" };
+  const ms = showMills ? `:${pad(centiseconds, 2)}` : "";
+  return { main, ms };
 };
 
 export const getTimerFontSize = (totalMs: number): number => {
@@ -47,8 +50,52 @@ export const getRandomMs = (minMs: number, maxMs: number) => {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 };
 
-export const formatShort = (secs: number) => {
-  if (secs >= 60)
-    return `${Math.floor(secs / 60)}m ${secs % 60 > 0 ? `${secs % 60}s` : ""}`.trim();
-  return `${secs}s`;
+// export const formatShort = (secs: number) => {
+//   if (secs >= 60)
+//     return `${Math.floor(secs / 60)}m ${secs % 60 > 0 ? `${secs % 60}s` : ""}`.trim();
+//   return `${secs}s`;
+// };
+
+const formatShort = (secs: number) => {
+  if (!secs || secs <= 0) return "0s";
+
+  // Force everything to integers immediately
+  const totalSeconds = Math.floor(secs);
+
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+
+  const parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+
+  // Check against the floored integer
+  if (s > 0 || parts.length === 0) {
+    parts.push(`${s}s`);
+  }
+
+  return parts.join(" ");
 };
+
+export function summarizePreset(preset: WorkoutPreset): string {
+  switch (preset.type) {
+    case "countdown":
+      return formatShort(preset.config.duration ?? 0);
+
+    case "interval": {
+      const segs = preset.config.segments ?? [];
+      const active = segs.filter((s) => s.durationSecs > 0);
+      if (active.length === 0) return "No intervals";
+      return active
+        .map((s) => `${s.name} ${formatShort(s.durationSecs)}`)
+        .join(" · ");
+    }
+
+    case "random": {
+      const min = formatShort(preset.config.minSecs ?? 0);
+      const max = formatShort(preset.config.maxSecs ?? 0);
+      return `${min} – ${max}`;
+    }
+  }
+}

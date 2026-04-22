@@ -1,15 +1,8 @@
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { Interval } from "./use-user-preferences";
 
 export type Unit = "Seconds" | "Minutes" | "Hours";
-
-export interface Interval {
-  id: number;
-  name: string;
-  durationSecs: number;
-  unit: Unit;
-  active: boolean;
-}
 
 export interface WorkoutPreset {
   id: string;

@@ -95,7 +95,7 @@ export default function TimerInfoBar(props: Props) {
         }}
       >
         <Text variant="labelSmall" style={{ color: theme.colors.onSurface }}>
-          {`Between ${minFormatted} and ${maxFormatted}`}
+          {`Somewhere between ${minFormatted} and ${maxFormatted}`}
         </Text>
       </View>
     );
@@ -120,7 +120,8 @@ export default function TimerInfoBar(props: Props) {
             <Text
               variant="labelSmall"
               style={{
-                minWidth: 70,
+                minWidth: 50,
+                fontSize: 10,
                 textAlign: "center",
                 color: isCurrentlyRunning
                   ? theme.colors.primary

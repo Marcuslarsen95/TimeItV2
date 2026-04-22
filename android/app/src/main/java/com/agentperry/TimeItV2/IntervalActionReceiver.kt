@@ -6,20 +6,23 @@ import android.content.Intent
 
 class IntervalActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val serviceIntent = Intent(context, IntervalService::class.java)
-
         when (intent.action) {
-            "ACTION_PAUSE" -> serviceIntent.putExtra("pause", true)
-            "ACTION_RESUME" -> serviceIntent.putExtra("resume", true)
-            "ACTION_STOP" -> serviceIntent.putExtra("stop", true)
-            "ACTION_SKIP" -> serviceIntent.putExtra("skip", true)
+            "ACTION_PAUSE" -> IntervalService.instance?.pauseEngine()
+            "ACTION_RESUME" -> IntervalService.instance?.resumeEngine()
+            "ACTION_STOP" -> {
+                IntervalService.instance?.resetEngine()
+                IntervalService.instance?.sendStoppedToJS()
+                IntervalService.instance?.stopSelf()
+            }
+            "ACTION_SKIP" -> IntervalService.instance?.skipToNext()
+            "ACTION_SKIP_FORWARD" -> IntervalService.instance?.skipForward(10000.0)
+            "ACTION_LAP" -> IntervalService.instance?.recordLap()
             "ACTION_STOP_ALARM" -> {
-                serviceIntent.action = "ACTION_STOP_ALARM"
+                val serviceIntent = Intent(context, IntervalService::class.java).apply {
+                    action = "ACTION_STOP_ALARM"
+                }
                 context.startService(serviceIntent)
-                return  
             }
         }
-
-        context.startService(serviceIntent)
     }
 }

@@ -23,7 +23,7 @@ const TimerDisplay = ({
 
   // Shared text style to keep it clean
   const timerTextStyle = {
-    fontFamily: "ChivoMonoItalic",
+    fontFamily: "ChivoMono",
     includeFontPadding: false,
     opacity: isPaused ? 0.5 : 1, // Dim the text when paused
   };
@@ -63,11 +63,7 @@ const TimerDisplay = ({
     };
   }, [isRandom, isRunning, isPaused]);
 
-  const displayTime = isRandom
-    ? randomtimerArray[randomIndex]
-    : isRunning
-      ? time
-      : "00:00";
+  const displayTime = isRandom ? randomtimerArray[randomIndex] : time;
 
   return (
     <View
@@ -85,7 +81,7 @@ const TimerDisplay = ({
         }}
       >
         {ms && <View style={{ width: 60 }} />}
-        <View style={{ width: "100%", overflow: "visible" }}>
+        <View style={{ overflow: "visible" }}>
           <Text
             variant="displayLarge"
             style={[
@@ -94,10 +90,7 @@ const TimerDisplay = ({
                 fontSize: 96,
                 lineHeight: 110,
                 textAlign: "center",
-                textShadowOffset: !isPaused
-                  ? { width: 4, height: 4 }
-                  : { width: 0, height: 0 },
-                textShadowRadius: 5,
+                paddingHorizontal: 6,
               },
             ]}
           >
@@ -106,7 +99,7 @@ const TimerDisplay = ({
         </View>
 
         {ms && (
-          <View style={{ width: 60 }}>
+          <View style={{ width: 50 }}>
             <Text
               variant="headlineSmall"
               style={[

@@ -145,14 +145,14 @@ export default function DraggableSettings({
     <Animated.View
       style={[
         styles.container,
-        { backgroundColor: theme.colors.primary + "16" },
+        // { backgroundColor: theme.colors.primary + "16" },
         animatedStyle,
       ]}
     >
       {/* ONLY the handleArea is draggable/tappable */}
       <GestureDetector gesture={combinedGesture}>
         <View style={[styles.handleArea]}>
-          <View style={styles.handle} />
+          {/* <View style={styles.handle} /> */}
           <Animated.Text
             style={[
               styles.collapsedLabel,

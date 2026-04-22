@@ -82,7 +82,7 @@ export default function RootLayout() {
   }, []);
 
   const { theme: md3Theme } = useMaterial3Theme({
-    sourceColor: "#3892b8",
+    sourceColor: "#93aab3",
   });
 
   const theme =
@@ -116,6 +116,8 @@ export default function RootLayout() {
 
     return () => sub.remove();
   }, []);
+  if (!loaded) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: "transparent" }}>
       <PaperProvider
@@ -123,13 +125,13 @@ export default function RootLayout() {
         settings={{ icon: (props) => <Ionicons {...props} /> }}
       >
         <LinearGradient
-          colors={[theme.colors.background, theme.colors.primary]}
+          colors={[theme.colors.background, theme.colors.primary + "22"]}
           start={{ x: 0, y: 1 }}
           end={{ x: 1, y: 0 }}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
           dither={false}
         />
-        {/* <GestureDetector gesture={tapGesture}> */}
+
         <View
           style={{ flex: 1, paddingBottom: navBarVisible ? 32 : 0 }}
           collapsable={false}
@@ -144,7 +146,6 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
           </Stack>
         </View>
-        {/* </GestureDetector> */}
       </PaperProvider>
     </GestureHandlerRootView>
   );

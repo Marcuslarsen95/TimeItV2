@@ -8,7 +8,6 @@ export interface Interval {
   name: string;
   durationSecs: number;
   unit: Unit;
-  active: boolean;
 }
 
 export interface UserPreferences {
@@ -36,21 +35,18 @@ const defaults: UserPreferences = {
         durationSecs: 30,
         name: "Active",
         unit: "Seconds",
-        active: true,
       },
       {
         id: 2,
         durationSecs: 10,
         name: "Recovery",
         unit: "Seconds",
-        active: true,
       },
       {
         id: 3,
-        durationSecs: 10,
+        durationSecs: 0,
         name: "Transition",
         unit: "Seconds",
-        active: false,
       },
     ],
   },

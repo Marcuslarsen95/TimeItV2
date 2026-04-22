@@ -62,8 +62,12 @@ export default function IntervalScreen() {
   const progress = useSharedValue(0);
   const counterRef = useRef(0);
 
-  const { main } = formatDateTimer(timer, false);
   const intervals = preferences.interval.segments;
+  const { main } = formatDateTimer(
+    // timer > 0 ? timer : intervals[0].durationSecs,
+    timer,
+    false,
+  );
   const intervalPresets = presets.filter((p) => p.type === "interval");
   const selectedInterval =
     intervals.find((i) => i.id === editingId) || intervals[0];
@@ -113,7 +117,7 @@ export default function IntervalScreen() {
 
   // --- Timer controls ---
   const startInterval = () => {
-    const activeIntervals = intervals.filter((i) => i.active);
+    const activeIntervals = intervals.filter((i) => i.durationSecs > 0);
     if (activeIntervals.length === 0) {
       showSnackbar("Please enable at least one interval.", true);
       return;
@@ -173,11 +177,20 @@ export default function IntervalScreen() {
   };
 
   const openPresets = () => {
+    const p = presets.find((p) => p.name === "Morning hiit");
+    console.log(JSON.stringify(p?.config.segments, null, 2));
+
     if (intervalPresets.length < 1) {
       showSnackbar("You don't have any saved presets", true);
     } else {
       setIsPresetsOpen(true);
     }
+  };
+
+  const handleDeletePreset = (id: string) => {
+    deletePreset(id);
+    if (intervalPresets.length <= 1) setIsPresetsOpen(false);
+    showSnackbar("Preset deleted!");
   };
 
   // --- Effects ---
@@ -260,24 +273,37 @@ export default function IntervalScreen() {
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-          <TimerDisplay time={main} isPaused={isPaused} isRunning={!!timer} />
+          <View style={{ flexDirection: "column" }}>
+            <TimerDisplay time={main} isPaused={isPaused} isRunning={!!timer} />
+            <TimerInfoBar
+              type="interval"
+              segments={intervals}
+              currentInterval={currentInterval}
+              isRunning={!!timer}
+            />
+          </View>
+
           <ActionButtonsRow
             timerActive={!!timer}
             isPaused={isPaused}
             pressPlay={startInterval}
             pressPause={togglePause}
-            pressStop={stopTimer}
-            pressSkipToNext={pressSkip}
-            firstButtonIcon="refresh"
-            firstButtonLabel="Reset"
-            thirdButtonIcon="play-skip-forward"
-            thirdButtonLabel="Skip"
+            leftButtonIcon="refresh"
+            leftButtonLabel="Reset"
+            leftButtonPress={stopTimer}
+            rightButtonIcon="play-skip-forward"
+            rightButtonLabel="Skip"
+            rightButtonPress={pressSkip}
           />
-          <TimerInfoBar
-            type="interval"
-            segments={intervals}
-            currentInterval={currentInterval}
-            isRunning={!!timer}
+
+          <AppSnackbar
+            visible={snackbar.visible}
+            message={snackbar.message}
+            onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
+            textColor={
+              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+            }
           />
         </View>
 
@@ -322,7 +348,7 @@ export default function IntervalScreen() {
                     : theme.colors.outlineVariant,
                   borderWidth: isSelected ? 2 : 1,
                   backgroundColor: bgColor,
-                  opacity: i.active ? 1 : 0.8,
+                  opacity: i.durationSecs > 0 ? 1 : 0.8,
                 },
                 labelStyle: {
                   fontWeight: isSelected ? "900" : "600",
@@ -357,6 +383,7 @@ export default function IntervalScreen() {
               {selectedInterval.durationSecs > 0 ? (
                 <Button
                   textColor={theme.colors.secondary}
+                  mode="outlined"
                   onPress={() =>
                     setIntervals((prev) =>
                       prev.map((i) =>
@@ -366,8 +393,18 @@ export default function IntervalScreen() {
                       ),
                     )
                   }
+                  style={{
+                    width: 160,
+                    padding: 0,
+                    alignSelf: "center",
+                  }}
+                  labelStyle={{
+                    fontSize: 12,
+                    lineHeight: 12,
+                    color: theme.colors.secondary,
+                  }}
                 >
-                  Disable
+                  Disable {selectedInterval.name} timer
                 </Button>
               ) : (
                 <Pressable
@@ -400,7 +437,7 @@ export default function IntervalScreen() {
                       opacity: 0.6,
                     }}
                   >
-                    tap to enable
+                    Tap here to enable {selectedInterval.name} timer
                   </Text>
                 </Pressable>
               )}
@@ -416,16 +453,6 @@ export default function IntervalScreen() {
             </Button>
           </View>
         </DraggableSettings>
-
-        <AppSnackbar
-          visible={snackbar.visible}
-          message={snackbar.message}
-          onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-          color={snackbar.isError ? theme.colors.error : theme.colors.primary}
-          textColor={
-            snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
-          }
-        />
       </View>
 
       <Portal>
@@ -448,6 +475,7 @@ export default function IntervalScreen() {
               </View>
               <PresetList
                 presets={intervalPresets}
+                type="interval"
                 onLoad={(preset) => {
                   updatePreference("interval", {
                     segments: preset.config.segments ?? [],
@@ -455,8 +483,7 @@ export default function IntervalScreen() {
                   showSnackbar("Preset loaded!");
                 }}
                 onDelete={(id) => {
-                  deletePreset(id);
-                  showSnackbar("Preset deleted!");
+                  handleDeletePreset(id);
                 }}
               />
             </>

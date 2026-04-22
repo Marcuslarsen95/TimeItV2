@@ -3,14 +3,16 @@ import { View, StyleSheet, Pressable } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
 import { WorkoutPreset } from "@/hooks/use-workout-presets";
+import { summarizePreset } from "@/utils/HelperFunctions";
 
 interface Props {
   presets: WorkoutPreset[];
+  type: "interval" | "countdown" | "random";
   onLoad: (preset: WorkoutPreset) => void;
   onDelete: (id: string) => void;
 }
 
-export default function PresetList({ presets, onLoad, onDelete }: Props) {
+export default function PresetList({ presets, onLoad, onDelete, type }: Props) {
   const theme = useTheme();
 
   if (presets.length === 0) return null; // don't render anything if no presets
@@ -21,19 +23,33 @@ export default function PresetList({ presets, onLoad, onDelete }: Props) {
         Saved Presets
       </Text>
       {presets.map((preset) => (
-        <View
+        <Pressable
           key={preset.id}
-          style={[styles.row, { borderColor: theme.colors.outline }]}
+          onPress={() => onLoad(preset)}
+          android_ripple={{ color: theme.colors.primary + "22" }}
+          style={({ pressed }) => [
+            styles.row,
+            {
+              borderColor: theme.colors.outline,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
         >
-          <Text style={styles.name}>{preset.name}</Text>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ color: theme.colors.secondary, fontWeight: "600" }}>
+              {preset.name}
+            </Text>
+            <Text
+              variant="labelSmall"
+              style={{
+                color: theme.colors.onSurface,
+                opacity: 0.7,
+              }}
+            >
+              {summarizePreset(preset)}
+            </Text>
+          </View>
           <View style={styles.actions}>
-            <Pressable onPress={() => onLoad(preset)} style={styles.iconButton}>
-              <Ionicons
-                name="download-outline"
-                size={20}
-                color={theme.colors.primary}
-              />
-            </Pressable>
             <Pressable
               onPress={() => onDelete(preset.id)}
               style={styles.iconButton}
@@ -45,7 +61,7 @@ export default function PresetList({ presets, onLoad, onDelete }: Props) {
               />
             </Pressable>
           </View>
-        </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -65,9 +81,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-  },
-  name: {
-    flex: 1,
   },
   actions: {
     flexDirection: "row",

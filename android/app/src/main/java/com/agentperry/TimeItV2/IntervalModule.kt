@@ -9,7 +9,6 @@ import com.facebook.react.bridge.Arguments
 
 class IntervalModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
-
     init {
         IntervalService.reactContext = reactContext
     }
@@ -94,6 +93,13 @@ class IntervalModule(reactContext: ReactApplicationContext) :
         map.putString("timerType", IntervalService.timerType)
         map.putDouble("remainingMs", IntervalService.remainingBeforePause.toDouble())
         promise.resolve(map)
+    }
+    @ReactMethod 
+    fun lap() {
+        val context = reactApplicationContext
+        val intent = Intent(context, IntervalService::class.java)
+        intent.putExtra("lap", true)
+        context.startService(intent)
     }
 
 }

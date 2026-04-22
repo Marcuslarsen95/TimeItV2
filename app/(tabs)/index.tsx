@@ -52,7 +52,10 @@ export default function SimpleTimer() {
   const { preferences, updatePreference } = useUserPreferences();
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
 
-  const { main } = formatDateTimer(timer, false);
+  const { main } = formatDateTimer(
+    timer > 0 ? timer : inputTimeSecs * 1000,
+    false,
+  );
   const countdownPresets = presets.filter((p) => p.type === "countdown");
 
   // --- Derived status ---
@@ -141,6 +144,12 @@ export default function SimpleTimer() {
     }
   };
 
+  const handleDeletePreset = (id: string) => {
+    deletePreset(id);
+    if (countdownPresets.length <= 1) setIsPresetsOpen(false);
+    showSnackbar("Preset deleted!");
+  };
+
   // --- Effects ---
   useEffect(() => {
     IntervalServiceModule.getState()
@@ -212,14 +221,23 @@ export default function SimpleTimer() {
             isPaused={isPaused}
             pressPlay={startTimer}
             pressPause={togglePause}
-            pressStop={stopTimer}
-            pressSkipToNext={skipForward}
-            firstButtonIcon="stop"
-            firstButtonLabel="Stop"
-            thirdButtonIcon="play-forward"
-            thirdButtonLabel="10s"
+            leftButtonIcon="stop"
+            leftButtonLabel="Stop"
+            leftButtonPress={stopTimer}
+            rightButtonIcon="play-forward"
+            rightButtonLabel="10s"
+            rightButtonPress={skipForward}
           />
           <TimerInfoBar type="countdown" durationSecs={inputTimeSecs} />
+          <AppSnackbar
+            visible={snackbar.visible}
+            message={snackbar.message}
+            onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
+            textColor={
+              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+            }
+          />
         </View>
 
         <DraggableSettings
@@ -245,16 +263,6 @@ export default function SimpleTimer() {
             </Button>
           </View>
         </DraggableSettings>
-
-        <AppSnackbar
-          visible={snackbar.visible}
-          message={snackbar.message}
-          onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-          color={snackbar.isError ? theme.colors.error : theme.colors.primary}
-          textColor={
-            snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
-          }
-        />
       </View>
 
       <Portal>
@@ -277,6 +285,7 @@ export default function SimpleTimer() {
               </View>
               <PresetList
                 presets={countdownPresets}
+                type="countdown"
                 onLoad={(preset) => {
                   const newDuration = preset.config.duration ?? 60;
                   setInputTimeSecs(newDuration);
@@ -285,8 +294,7 @@ export default function SimpleTimer() {
                   showSnackbar("Preset loaded!");
                 }}
                 onDelete={(id) => {
-                  deletePreset(id);
-                  showSnackbar("Preset deleted!");
+                  handleDeletePreset(id);
                 }}
               />
             </>

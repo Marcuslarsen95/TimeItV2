@@ -4,7 +4,7 @@ export default {
     slug: "TimeItV2",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/logo_no_bg_v4.png",
+    icon: "./assets/images/cria-icon.png",
     scheme: "timeitv2",
     userInterfaceStyle: "automatic",
 
@@ -12,7 +12,7 @@ export default {
       versionCode: 1,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/logo_no_bg_v4.png",
+        foregroundImage: "./assets/images/cria-icon.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
@@ -35,7 +35,7 @@ export default {
 
     web: {
       output: "static",
-      favicon: "./assets/images/new_logo_clean.png",
+      favicon: "./assets/images/cria-icon.png",
     },
 
     plugins: [
@@ -43,7 +43,7 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/logo_no_bg_v4.png",
+          image: "./assets/images/cria-icon.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",

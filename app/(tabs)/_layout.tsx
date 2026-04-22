@@ -47,7 +47,7 @@ export default function MainLayout() {
         options={{
           title: "Countdown",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="timer-outline" size={size} color={color} />
+            <Ionicons name="hourglass-outline" size={size} color={color} />
           ),
         }}
       />
@@ -57,6 +57,15 @@ export default function MainLayout() {
           title: "Interval",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="stopwatch-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="stopwatch"
+        options={{
+          title: "Stopwatch",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="timer-outline" size={size} color={color} />
           ),
         }}
       />

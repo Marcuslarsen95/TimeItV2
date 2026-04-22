@@ -148,6 +148,12 @@ export default function RandomScreen() {
     }
   };
 
+  const handleDeletePreset = (id: string) => {
+    deletePreset(id);
+    if (randomPresets.length <= 1) setIsPresetsOpen(false);
+    showSnackbar("Preset deleted!");
+  };
+
   // --- Effects ---
   useEffect(() => {
     IntervalServiceModule.getState()
@@ -224,14 +230,23 @@ export default function RandomScreen() {
             isPaused={isPaused}
             pressPlay={startTimer}
             pressPause={togglePause}
-            pressStop={stopTimer}
-            pressSkipToNext={skipForward}
-            firstButtonIcon="stop"
-            firstButtonLabel="Stop"
-            thirdButtonIcon="play-forward"
-            thirdButtonLabel="10s"
+            leftButtonIcon="stop"
+            leftButtonLabel="Stop"
+            leftButtonPress={stopTimer}
+            rightButtonIcon="play-forward"
+            rightButtonLabel="10s"
+            rightButtonPress={skipForward}
           />
           <TimerInfoBar type="random" minSecs={minSecs} maxSecs={maxSecs} />
+          <AppSnackbar
+            visible={snackbar.visible}
+            message={snackbar.message}
+            onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
+            textColor={
+              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+            }
+          />
         </View>
 
         <DraggableSettings
@@ -262,16 +277,6 @@ export default function RandomScreen() {
             </Button>
           </View>
         </DraggableSettings>
-
-        <AppSnackbar
-          visible={snackbar.visible}
-          message={snackbar.message}
-          onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-          color={snackbar.isError ? theme.colors.error : theme.colors.primary}
-          textColor={
-            snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
-          }
-        />
       </View>
 
       <Portal>
@@ -294,6 +299,7 @@ export default function RandomScreen() {
               </View>
               <PresetList
                 presets={randomPresets}
+                type="random"
                 onLoad={(preset) => {
                   updatePreference("random", {
                     minSecs: preset.config.minSecs ?? 60,
@@ -303,9 +309,7 @@ export default function RandomScreen() {
                   showSnackbar("Preset loaded!");
                 }}
                 onDelete={(id) => {
-                  deletePreset(id);
-                  showSnackbar("Preset deleted!");
-                  if (randomPresets.length < 1) setIsPresetsOpen(false);
+                  handleDeletePreset(id);
                 }}
               />
             </>

@@ -10,7 +10,7 @@ export const layout = StyleSheet.create({
   },
   mainContainer: {
     flex: 1,
-    justifyContent: "space-evenly",
+    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 18,
   },

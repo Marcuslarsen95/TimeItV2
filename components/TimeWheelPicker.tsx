@@ -9,7 +9,7 @@ import {
 import { Text, useTheme } from "react-native-paper";
 
 const ITEM_HEIGHT = 40;
-const ITEM_WIDTH = 76;
+const ITEM_WIDTH = 58;
 const VISIBLE_ITEMS = 3;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
@@ -51,18 +51,30 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
   };
 
   return (
-    <View style={[styles.wheel, { borderRadius: 10 }]}>
+    <View style={[styles.wheel]}>
       <View
         pointerEvents="none"
         style={[
           styles.pill,
           {
             top: ITEM_HEIGHT,
-            // backgroundColor: theme.colors.primary,
-            // borderColor: theme.colors.outlineVariant,
             borderWidth: 0,
           },
         ]}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: ITEM_HEIGHT,
+          left: 0,
+          right: 0,
+          height: ITEM_HEIGHT,
+          borderTopWidth: 1,
+          borderBottomWidth: 1,
+          borderColor: theme.colors.primary,
+          zIndex: 1,
+        }}
       />
       <FlatList
         ref={flatListRef}
@@ -100,16 +112,9 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
                 styles.item,
                 {
                   transform: [
-                    // { perspective: 180 },
-                    // { rotateX: `${angleDeg}deg` },
-                    { scaleY: isSelected ? scaleY : scaleY * 0.8 },
-                    { scaleX: isSelected ? 1 : 0.8 },
+                    { scaleY: isSelected ? scaleY : scaleY * 0.9 },
+                    { scaleX: isSelected ? 1 : 0.95 },
                   ],
-                  backgroundColor: isSelected
-                    ? theme.colors.primary
-                    : theme.colors.secondary + "cc",
-                  borderRadius: 8,
-                  // opacity,
                 },
               ]}
             >
@@ -118,8 +123,8 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
                   styles.itemText,
                   {
                     color: isSelected
-                      ? theme.colors.onPrimary
-                      : theme.colors.onPrimary,
+                      ? theme.colors.primary
+                      : theme.colors.secondary,
                     fontSize: isSelected ? 26 : 18,
                     fontWeight: isSelected ? "600" : "400",
                   },
@@ -210,6 +215,7 @@ export default function TimeWheelPicker({
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Hours
           </Text>
+
           <Wheel
             values={hourValues}
             selectedIndex={hours}
@@ -223,6 +229,7 @@ export default function TimeWheelPicker({
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Minutes
           </Text>
+
           <Wheel
             values={sixtyValues}
             selectedIndex={minutes}
@@ -236,6 +243,7 @@ export default function TimeWheelPicker({
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Seconds
           </Text>
+
           <Wheel
             values={sixtyValues}
             selectedIndex={seconds}

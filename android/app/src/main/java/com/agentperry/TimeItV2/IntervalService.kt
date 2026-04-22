@@ -31,6 +31,8 @@ class IntervalService : Service() {
         var isPaused: Boolean = true
         var timerType: String = "interval"
         var remainingBeforePause: Long = 0L
+        var instance: IntervalService? = null
+        var shouldLoop: Boolean = false
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -40,11 +42,10 @@ class IntervalService : Service() {
     private var lastNotificationUpdateTime = 0L
     private var beep: MediaPlayer? = null
     private var ping: MediaPlayer? = null
-    private var shouldLoop = true
 
     override fun onCreate() {
         super.onCreate()
-
+        instance = this
     
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -70,7 +71,7 @@ class IntervalService : Service() {
     }
 
     if (intent.hasExtra("repeat")) {
-        shouldLoop = intent.getBooleanExtra("repeat", true)
+        shouldLoop = intent.getBooleanExtra("repeat", false)
     }
 
     // 1. HANDLE JSON DATA
@@ -93,26 +94,17 @@ class IntervalService : Service() {
 
     // 2. HANDLE ACTIONS (Notification / Receiver)
     when (intent.action) {
-        "ACTION_PAUSE" -> {
-            pauseEngine()
-            return START_STICKY
-        }
-        "ACTION_RESUME" -> {
-            resumeEngine()
-            return START_STICKY
-        }
-        "ACTION_STOP" -> {
-            resetEngine()
-            sendStoppedToJS()
-            stopSelf()
-            return START_NOT_STICKY
-        }
+        "ACTION_PAUSE" -> { pauseEngine(); return START_STICKY }
+        "ACTION_RESUME" -> { resumeEngine(); return START_STICKY }
+        "ACTION_STOP" -> { resetEngine(); sendStoppedToJS(); stopSelf(); return START_NOT_STICKY }
+        "ACTION_SKIP" -> { skipToNext(); return START_STICKY }
+        "ACTION_SKIP_FORWARD" -> { skipForward(10000.0); return START_STICKY }
+        "ACTION_LAP" -> { recordLap(); return START_STICKY }
         "ACTION_STOP_ALARM" -> {
             alarmPlayer?.stop()
             alarmPlayer?.release()
             alarmPlayer = null
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.cancel(2)
+            getSystemService(NotificationManager::class.java).cancel(2)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -144,6 +136,10 @@ class IntervalService : Service() {
     if (intent.getBooleanExtra("skipForward", false)) {
         val ms = intent.getDoubleExtra("skipForwardMs", 10000.0)
         skipForward(ms)
+    }
+
+    if (intent.getBooleanExtra("lap", false)) {
+        recordLap()
     }
 
     return START_STICKY
@@ -203,7 +199,7 @@ class IntervalService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(R.drawable.stop_sharp_white, "Stop", stopPending)  // ← add this
+            .addAction(R.drawable.stop_vector, "Stop", stopPending)  // ← add this
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)
@@ -232,22 +228,22 @@ class IntervalService : Service() {
 
 
 
-    private fun pauseEngine() {
+    internal fun pauseEngine() {
         isPaused = true
         val now = System.currentTimeMillis()
         val current = intervals[currentIndex]
         val elapsed = now - intervalStartTime
         val remaining = current.durationMs - elapsed
+        val displayMs = if (timerType == "stopwatch") elapsed else current.durationMs - elapsed
+        updateNotification(displayMs)
         remainingBeforePause = current.durationMs - elapsed
 
         handler.removeCallbacks(tickRunnable)
-        
-        updateNotification(remaining)
 
         sendPausedToJS()
     }
 
-    private fun resumeEngine() {
+    internal fun resumeEngine() {
         isRunning = true
         isPaused = false
         sendResumedToJS()
@@ -263,7 +259,7 @@ class IntervalService : Service() {
         // ... rest of your code
     }
 
-    private fun skipToNext() {
+    internal fun skipToNext() {
         if (intervals.isEmpty()) return 
 
         // 1. Move to next index
@@ -291,26 +287,56 @@ class IntervalService : Service() {
         updateNotification(nextInterval.durationMs) 
     }
 
-    private fun skipForward(ms: Double) {
+    internal fun skipForward(ms: Double) {
         if (intervals.isEmpty()) return
+        if (timerType == "stopwatch") return
+
+        val isLastInterval = currentIndex == intervals.size - 1
 
         if (isPaused) {
-            if (remainingBeforePause < ms.toLong()) {
-                remainingBeforePause = 0
+            val newRemaining = remainingBeforePause - ms.toLong()
+            if (newRemaining <= 0) {
+                if (!shouldLoop && isLastInterval) {
+                    remainingBeforePause = 0L
+                    sendStoppedToJS()
+                    stopSelf()
+                    return
+                }
+                currentIndex = (currentIndex + 1) % intervals.size
+                val nextInterval = intervals[currentIndex]
+                remainingBeforePause = nextInterval.durationMs
+                sendUpdateToJS(nextInterval.name, remainingBeforePause)
+                updateNotification(remainingBeforePause)  // already here
             } else {
-                remainingBeforePause -= ms.toLong()  // 👈
+                remainingBeforePause = newRemaining
+                sendUpdateToJS(intervals[currentIndex].name, remainingBeforePause)
+                updateNotification(remainingBeforePause)  // already here
             }
-            sendUpdateToJS(intervals[currentIndex].name, remainingBeforePause)
         } else {
             val remaining = intervals[currentIndex].durationMs - (System.currentTimeMillis() - intervalStartTime)
-            if (remaining < ms.toLong()) {
-                isRunning = false
-                handler.removeCallbacksAndMessages(null)
-                sendStoppedToJS()
-                handler.postDelayed({ stopSelf() }, 1000)
-                return
+            if (remaining <= ms.toLong()) {
+                if (!shouldLoop && isLastInterval) {
+                    isRunning = false
+                    handler.removeCallbacksAndMessages(null)
+                    sendStoppedToJS()
+                    if (timerType == "countdown" || timerType == "random") {
+                        stopForeground(true)
+                        sendAlarmNotification()
+                        playAlarmSound()
+                    } else {
+                        handler.postDelayed({ stopSelf() }, 1000)
+                    }
+                    return
+                }
+                currentIndex = (currentIndex + 1) % intervals.size
+                intervalStartTime = System.currentTimeMillis()
+                val nextInterval = intervals[currentIndex]
+                sendUpdateToJS(nextInterval.name, nextInterval.durationMs)
+                updateNotification(nextInterval.durationMs)  // already here
             } else {
-                intervalStartTime -= ms.toLong()  // 👈
+                intervalStartTime -= ms.toLong()
+                val newRemaining = intervals[currentIndex].durationMs - (System.currentTimeMillis() - intervalStartTime)
+                updateNotification(newRemaining)
             }
         }
     }
@@ -318,7 +344,7 @@ class IntervalService : Service() {
 
 
 
-    private fun startEngine() {
+    internal fun startEngine() {
         isRunning = true
         isPaused = false
         remainingBeforePause = 0L
@@ -328,7 +354,7 @@ class IntervalService : Service() {
         handler.post(tickRunnable)
     }
 
-    private fun resetEngine() {
+    internal fun resetEngine() {
         isRunning = false
         handler.removeCallbacksAndMessages(null)
         isPaused = false
@@ -338,7 +364,7 @@ class IntervalService : Service() {
     }
 
 
-    private fun sendUpdateToJS(intervalName: String, remainingMs: Long) {
+    internal fun sendUpdateToJS(intervalName: String, remainingMs: Long) {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
@@ -352,7 +378,7 @@ class IntervalService : Service() {
             .emit("IntervalUpdate", params)
     }
 
-    private fun sendPausedToJS() {
+    internal fun sendPausedToJS() {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
@@ -363,7 +389,7 @@ class IntervalService : Service() {
             .emit("IntervalPaused", params)
     }
 
-    private fun sendResumedToJS() {
+    internal fun sendResumedToJS() {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
@@ -374,7 +400,7 @@ class IntervalService : Service() {
             .emit("IntervalResumed", params)
     }
 
-    private fun sendStoppedToJS() {
+    internal fun sendStoppedToJS() {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
@@ -384,6 +410,18 @@ class IntervalService : Service() {
         ctx
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit("IntervalStopped", params)
+    }
+
+    internal fun recordLap() {
+        if (timerType != "stopwatch") return
+        val elapsed = System.currentTimeMillis() - intervalStartTime
+        
+        val ctx = reactContext ?: return
+        val params = Arguments.createMap().apply {
+            putDouble("elapsedMs", elapsed.toDouble())
+        }
+        ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("StopwatchLap", params)
     }
 
 
@@ -400,6 +438,16 @@ class IntervalService : Service() {
             val remaining = current.durationMs - elapsed
 
             val currentSecond = Math.ceil(remaining.toDouble() / 1000.0).toLong()
+
+            if (timerType == "stopwatch") {
+                sendUpdateToJS("Stopwatch", elapsed)
+                handler.postDelayed(this, 50)
+                if (now - lastNotificationUpdateTime >= 1000) {
+                    updateNotification(elapsed)
+                    lastNotificationUpdateTime = now
+                }
+                return
+            }
 
             if (currentSecond in 1..3 && currentSecond != lastBeepSecond) {
                 if (timerType == "interval"){
@@ -428,6 +476,7 @@ class IntervalService : Service() {
                     handler.removeCallbacksAndMessages(null)
                     sendStoppedToJS()
                     if (timerType == "countdown" || timerType == "random") {
+                        stopForeground(true)
                         sendAlarmNotification()
                         playAlarmSound()
                     } else {
@@ -439,7 +488,7 @@ class IntervalService : Service() {
                 
 
                 currentIndex = (currentIndex + 1) % intervals.size
-                intervalStartTime = System.currentTimeMillis()
+                intervalStartTime = System.currentTimeMillis() 
                 updateNotification(intervals[currentIndex].durationMs)
             }
 
@@ -447,90 +496,105 @@ class IntervalService : Service() {
         }
     }
 
+    private fun buildActionPendingIntent(requestCode: Int, action: String): PendingIntent {
+        val intent = Intent(this, IntervalService::class.java).apply {
+            this.action = action
+        }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(
+                this, requestCode, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        } else {
+            PendingIntent.getService(
+                this, requestCode, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+        }
+    }
 
     private fun startForegroundService() {
+        if (timerType == "stopwatch") {
+            val notification = buildNotification(false, 0L)
+            startForeground(1, notification)
+            return
+        }
+
         val current = intervals[currentIndex]
         val now = System.currentTimeMillis()
         val elapsed = now - intervalStartTime
         val remaining = current.durationMs - elapsed
-
         val notification = buildNotification(false, remaining)
         startForeground(1, notification)
     }
 
 
 private fun buildNotification(isPaused: Boolean, remainingMs: Long): Notification {
-
     val channelId = "interval_channel"
 
-    val pauseIntent = Intent(this, IntervalActionReceiver::class.java).apply {
-        action = "ACTION_PAUSE"
+   val pausePending = buildActionPendingIntent(0, "ACTION_PAUSE")
+    val resumePending = buildActionPendingIntent(1, "ACTION_RESUME")
+    val stopPending = buildActionPendingIntent(2, "ACTION_STOP")
+    val skipPending = if (timerType == "interval") {
+        buildActionPendingIntent(3, "ACTION_SKIP")
+    } else {
+        buildActionPendingIntent(4, "ACTION_SKIP_FORWARD")
     }
-    val pausePending = PendingIntent.getBroadcast(
-        this, 0, pauseIntent, PendingIntent.FLAG_IMMUTABLE
-    )
-
-    val resumeIntent = Intent(this, IntervalActionReceiver::class.java).apply {
-        action = "ACTION_RESUME"
-    }
-    val resumePending = PendingIntent.getBroadcast(
-        this, 1, resumeIntent, PendingIntent.FLAG_IMMUTABLE
-    )
-
-    val stopIntent = Intent(this, IntervalActionReceiver::class.java).apply {
-        action = "ACTION_STOP"
-    }
-    val stopPending = PendingIntent.getBroadcast(
-        this, 2, stopIntent, PendingIntent.FLAG_IMMUTABLE
-    )
-
-    val skipIntent = Intent(this, IntervalActionReceiver::class.java).apply {
-        action = "ACTION_SKIP"
-    }
-
-    val skipPending = PendingIntent.getBroadcast(
-        this, 3, skipIntent, PendingIntent.FLAG_IMMUTABLE
-    )
-
-    // tapping notification body sends to app open 
-    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-
+    val lapPending = buildActionPendingIntent(5, "ACTION_LAP")
     val contentPendingIntent = PendingIntent.getActivity(
-        this,
-        0,
-        launchIntent,
+        this, 0,
+        packageManager.getLaunchIntentForPackage(packageName),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 
+    val intervalName = when (timerType) {
+        "random" -> "Random"
+        "stopwatch" -> "Stopwatch"
+        else -> if (intervals.isNotEmpty()) intervals[currentIndex].name else "Timer"
+    }
+
+    val thirdButtonIcon = when (timerType) {
+        "random" -> R.drawable.fast_forward_vector
+        "stopwatch" -> R.drawable.laps_vector
+        "interval" -> R.drawable.skip_next_vector
+        "countdown" -> R.drawable.fast_forward_vector
+        else -> R.drawable.skip_next_vector
+    }
+
+    val thirdButtonLabel = when (timerType) {
+        "stopwatch" -> "Lap"
+        else -> "Skip"
+    }
+
     val builder = NotificationCompat.Builder(this, channelId)
-        .setContentTitle("${intervals[currentIndex].name} timer")
         .setSmallIcon(R.drawable.notification_icon)
         .setContentIntent(contentPendingIntent)
         .setColor(android.graphics.Color.parseColor("#3892B8"))
         .setColorized(true)
         .setOngoing(true)
         .setShowWhen(false)
-        .setOnlyAlertOnce(true) // Crucial to prevent "flickering" when folded
-        .setCategory(NotificationCompat.CATEGORY_SERVICE) // Helps Android prioritize layout
+        .setOnlyAlertOnce(true)
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
 
     if (isPaused) {
-        val text = if (timerType == "random") "Random timer paused" else "Paused • ${formatTime(remainingMs)}"
-        builder.setContentText(text)
-        builder.addAction(R.drawable.play_sharp_white, "Resume", resumePending)
+        builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
+        builder.setContentText("$intervalName • Paused")
+        builder.addAction(R.drawable.play_vector, "Resume", resumePending)   // Action 0
     } else {
-        val text = if (timerType == "random") "Random timer running" else "Running • ${formatTime(remainingMs)}"
-        builder.setContentText(text)
-        builder.addAction(R.drawable.pause_sharp_white, "Pause", pausePending)
+        builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
+        builder.setContentText("$intervalName • Running")
+        builder.addAction(R.drawable.pause_vector, "Pause", pausePending)    // Action 0
     }
 
-    builder.addAction(R.drawable.stop_sharp_white, "Stop", stopPending)
-    builder.addAction(R.drawable.play_skip_forward_sharp_white, "Skip", skipPending)
+    builder.addAction(R.drawable.stop_vector, "Stop", stopPending)           // Action 1
+    builder.addAction(
+        thirdButtonIcon,
+        thirdButtonLabel,
+        if (timerType == "stopwatch") lapPending else skipPending,
+    )
 
-    // LIMIT compact actions
-    // If you have too many actions, the text disappears. 
-    // Show only the Play/Pause button (index 0) in compact view to save space for the timer.
     val style = androidx.media.app.NotificationCompat.MediaStyle()
-        .setShowActionsInCompactView(0,1,2) // Show buttons in compact view
+        .setShowActionsInCompactView(0, 2) // Play/Pause + Skip/Lap, hide Stop
 
     builder.setStyle(style)
 
@@ -553,6 +617,7 @@ private fun formatTime(ms: Long): String {
 }
 
     override fun onDestroy() {
+        instance = null
         handler.removeCallbacksAndMessages(null)
         beep?.release()
         ping?.release()

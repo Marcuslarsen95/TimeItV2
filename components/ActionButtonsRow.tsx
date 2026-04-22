@@ -8,26 +8,25 @@ interface ActionButtonProps {
   withSkips?: boolean;
   pressPlay: () => void;
   pressPause: () => void;
-  pressStop: () => void;
-  pressSkipToNext: () => void;
-  thirdButtonIcon: string;
-  thirdButtonLabel: string;
-  firstButtonIcon: string;
-  firstButtonLabel: string;
+  leftButtonIcon: string;
+  leftButtonLabel: string;
+  leftButtonPress: () => void;
+  rightButtonIcon: string;
+  rightButtonLabel: string;
+  rightButtonPress: () => void;
 }
 
 const ActionButtonsRow = ({
   timerActive,
   isPaused,
-  withSkips = false,
   pressPlay,
   pressPause,
-  pressStop,
-  pressSkipToNext,
-  thirdButtonIcon,
-  thirdButtonLabel,
-  firstButtonIcon,
-  firstButtonLabel,
+  leftButtonIcon,
+  leftButtonLabel,
+  leftButtonPress,
+  rightButtonIcon,
+  rightButtonLabel,
+  rightButtonPress,
 }: ActionButtonProps) => {
   const theme = useTheme();
   return (
@@ -47,43 +46,48 @@ const ActionButtonsRow = ({
     >
       <View style={{ alignItems: "center" }}>
         <IconButton
-          icon={firstButtonIcon}
+          icon={leftButtonIcon}
           mode="outlined"
           size={40}
-          onPress={pressStop}
+          onPress={leftButtonPress}
           iconColor={theme.colors.secondary}
           contentStyle={{}}
           style={{ borderWidth: 0, marginBottom: -5 }}
         />
         <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
-          {firstButtonLabel}
+          {leftButtonLabel}
         </Text>
       </View>
-      <IconButton
-        icon={isPaused ? "play" : "pause"}
-        mode="outlined"
-        size={64}
-        onPress={() => {
-          if (timerActive) {
-            pressPause();
-          } else {
-            pressPlay();
-          }
-        }}
-        iconColor={theme.colors.primary}
-        style={{ borderWidth: 0 }}
-      />
       <View style={{ alignItems: "center" }}>
         <IconButton
-          icon={thirdButtonIcon}
+          icon={isPaused ? "play" : "pause"}
+          mode="outlined"
+          size={64}
+          onPress={() => {
+            if (timerActive) {
+              pressPause();
+            } else {
+              pressPlay();
+            }
+          }}
+          iconColor={theme.colors.primary}
+          style={{ borderWidth: 0, marginBottom: -5 }}
+        />
+        {/* <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
+          {isPaused ? "play" : "pause"}
+        </Text> */}
+      </View>
+      <View style={{ alignItems: "center" }}>
+        <IconButton
+          icon={rightButtonIcon}
           mode="outlined"
           size={40}
-          onPress={pressSkipToNext}
+          onPress={rightButtonPress}
           iconColor={theme.colors.secondary}
           style={{ borderWidth: 0, marginBottom: -5 }}
         />
         <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
-          {thirdButtonLabel}
+          {rightButtonLabel}
         </Text>
       </View>
     </View>
