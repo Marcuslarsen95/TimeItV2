@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { View, useColorScheme } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import React, { useEffect, useState, useRef } from "react";
 
@@ -25,7 +25,8 @@ const TimerDisplay = ({
   const timerTextStyle = {
     fontFamily: "ChivoMono",
     includeFontPadding: false,
-    opacity: isPaused ? 0.5 : 1, // Dim the text when paused
+    opacity: isPaused ? 0.5 : 0.8, // Dim the text when paused
+    color: theme.colors.onBackground,
   };
 
   const randomtimerArray = [

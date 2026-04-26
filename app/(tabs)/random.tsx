@@ -219,12 +219,16 @@ export default function RandomScreen() {
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-          <TimerDisplay
-            time="??:??"
-            isPaused={isPaused}
-            isRunning={!!timer}
-            isRandom={true}
-          />
+          <View style={{ flexDirection: "column" }}>
+            <TimerDisplay
+              time="??:??"
+              isPaused={isPaused}
+              isRunning={!!timer}
+              isRandom={true}
+            />
+            <TimerInfoBar type="random" minSecs={minSecs} maxSecs={maxSecs} />
+          </View>
+
           <ActionButtonsRow
             timerActive={timer > 0}
             isPaused={isPaused}
@@ -237,7 +241,7 @@ export default function RandomScreen() {
             rightButtonLabel="10s"
             rightButtonPress={skipForward}
           />
-          <TimerInfoBar type="random" minSecs={minSecs} maxSecs={maxSecs} />
+
           <AppSnackbar
             visible={snackbar.visible}
             message={snackbar.message}
@@ -258,22 +262,22 @@ export default function RandomScreen() {
         >
           <View style={styles.wheelContainer}>
             <TimeWheelPicker
-              label="Minimum duration"
+              label="Between"
               valueInSeconds={minSecs}
               onChange={setMinSecs}
             />
             <TimeWheelPicker
-              label="Maximum duration"
+              label="And"
               valueInSeconds={maxSecs}
               onChange={setMaxSecs}
             />
           </View>
           <View style={styles.presetRow}>
             <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save Preset
+              Save for later
             </Button>
             <Button icon="bookmarks-outline" onPress={openPresets}>
-              Load Presets
+              Load saved
             </Button>
           </View>
         </DraggableSettings>

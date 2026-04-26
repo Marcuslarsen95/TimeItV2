@@ -1,27 +1,27 @@
 export default {
   expo: {
-    name: "TimeItV2",
-    slug: "TimeItV2",
+    name: "Cria Timer",
+    slug: "cria-timer",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/cria-icon.png",
-    scheme: "timeitv2",
+    icon: "./assets/images/icon_logo_full.png",
+    scheme: "cria-timer",
     userInterfaceStyle: "automatic",
 
     android: {
       versionCode: 1,
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/cria-icon.png",
+        backgroundColor: "#16191d",
+        foregroundImage: "./assets/images/icon_logo_adaptive.png",
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-      package: "com.agentperry.TimeItV2",
-      backgroundColor: "transparent",
+      package: "com.agentperry.criatimer",
+      backgroundColor: "#16191d",
+      allowBackup: true,
     },
     androidStatusBar: {
       translucent: true,
-      backgroundColor: "#00000000",
     },
     androidNavigationBar: {
       visible: "always",
@@ -35,7 +35,7 @@ export default {
 
     web: {
       output: "static",
-      favicon: "./assets/images/cria-icon.png",
+      favicon: "./assets/images/icon_logo_full.png",
     },
 
     plugins: [
@@ -43,12 +43,12 @@ export default {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/cria-icon.png",
+          image: "./assets/images/icon_logo_full.png",
           imageWidth: 200,
           resizeMode: "contain",
-          backgroundColor: "#ffffff",
+          backgroundColor: "#16191d", // charcoal bg for light mode too
           dark: {
-            backgroundColor: "#000000",
+            backgroundColor: "#16191d", // same — unified look
           },
         },
       ],

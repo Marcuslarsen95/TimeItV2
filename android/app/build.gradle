@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.agentperry.TimeItV2'
+    namespace 'com.agentperry.criatimer'
     defaultConfig {
-        applicationId 'com.agentperry.TimeItV2'
+        applicationId 'com.agentperry.criatimer'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

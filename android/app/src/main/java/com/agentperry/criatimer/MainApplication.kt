@@ -1,4 +1,4 @@
-package com.agentperry.TimeItV2
+package com.agentperry.criatimer
 
 import android.app.Application
 import android.content.res.Configuration

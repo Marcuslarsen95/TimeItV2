@@ -5,6 +5,7 @@ import {
   NativeModules,
   DeviceEventEmitter,
   Text,
+  ScrollView,
 } from "react-native";
 import { useTheme } from "react-native-paper";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -12,6 +13,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { layout } from "../../styles/layout";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 
+import LapList from "@/components/LapList";
 import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
@@ -102,6 +104,10 @@ export default function StopWatch() {
     setLaps((prev) => [...prev, timer]);
   };
 
+  const handleClearLaps = () => {
+    setLaps([]);
+  };
+
   // --- Effects ---
   useEffect(() => {
     IntervalServiceModule.getState()
@@ -186,9 +192,13 @@ export default function StopWatch() {
             leftButtonLabel="Stop"
             leftButtonPress={stopTimer}
             rightButtonIcon="stopwatch-outline"
-            rightButtonLabel="lap"
+            rightButtonLabel="Lap"
             rightButtonPress={pressLap}
           />
+          <View>
+            <LapList laps={laps} onClear={handleClearLaps} />
+          </View>
+
           <AppSnackbar
             visible={snackbar.visible}
             message={snackbar.message}
@@ -198,9 +208,6 @@ export default function StopWatch() {
               snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
             }
           />
-          <View>
-            <Text>{laps}</Text>
-          </View>
         </View>
       </View>
     </GestureHandlerRootView>

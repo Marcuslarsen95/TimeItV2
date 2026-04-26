@@ -228,7 +228,7 @@ export default function SimpleTimer() {
             rightButtonLabel="10s"
             rightButtonPress={skipForward}
           />
-          <TimerInfoBar type="countdown" durationSecs={inputTimeSecs} />
+          {/* <TimerInfoBar type="countdown" durationSecs={inputTimeSecs} /> */}
           <AppSnackbar
             visible={snackbar.visible}
             message={snackbar.message}
@@ -256,10 +256,10 @@ export default function SimpleTimer() {
           </View>
           <View style={styles.presetRow}>
             <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save Preset
+              Save for later
             </Button>
             <Button icon="bookmarks-outline" onPress={openPresets}>
-              Load Presets
+              Load saved
             </Button>
           </View>
         </DraggableSettings>

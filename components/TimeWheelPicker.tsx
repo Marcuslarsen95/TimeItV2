@@ -5,11 +5,13 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   FlatList,
+  TouchableOpacity,
+  TextInput,
 } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 
-const ITEM_HEIGHT = 40;
-const ITEM_WIDTH = 58;
+const ITEM_HEIGHT = 35;
+const ITEM_WIDTH = 55;
 const VISIBLE_ITEMS = 3;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
@@ -23,6 +25,8 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
   const theme = useTheme();
   const flatListRef = useRef<FlatList>(null);
   const [localIndex, setLocalIndex] = useState(selectedIndex);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     setLocalIndex(selectedIndex);
@@ -48,6 +52,17 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
     if (index >= 0 && index < values.length) {
       onChange(index);
     }
+  };
+
+  const commit = () => {
+    const parsed = parseInt(editValue, 10);
+    const max = values.length - 1;
+    const clamped = isNaN(parsed)
+      ? localIndex
+      : Math.max(0, Math.min(max, parsed));
+    setLocalIndex(clamped);
+    onChange(clamped);
+    setIsEditing(false);
   };
 
   return (
@@ -107,35 +122,70 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
               : 0.15;
 
           return (
-            <View
-              style={[
-                styles.item,
-                {
-                  transform: [
-                    { scaleY: isSelected ? scaleY : scaleY * 0.9 },
-                    { scaleX: isSelected ? 1 : 0.95 },
-                  ],
-                },
-              ]}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                setEditValue(item);
+                setIsEditing(true);
+                console.log("pressed");
+              }}
             >
-              <Text
+              <View
                 style={[
-                  styles.itemText,
+                  styles.item,
                   {
-                    color: isSelected
-                      ? theme.colors.primary
-                      : theme.colors.secondary,
-                    fontSize: isSelected ? 26 : 18,
-                    fontWeight: isSelected ? "600" : "400",
+                    transform: [
+                      { scaleY: isSelected ? scaleY : scaleY * 0.7 },
+                      { scaleX: isSelected ? 1 : 0.7 },
+                    ],
                   },
                 ]}
               >
-                {item}
-              </Text>
-            </View>
+                <Text
+                  style={[
+                    styles.itemText,
+                    {
+                      color: isSelected
+                        ? theme.colors.primary
+                        : theme.colors.secondary,
+                      fontSize: isSelected ? 26 : 18,
+                      fontWeight: isSelected ? "600" : "400",
+                      opacity,
+                    },
+                  ]}
+                >
+                  {item}
+                </Text>
+              </View>
+            </TouchableOpacity>
           );
         }}
       />
+      {isEditing && (
+        <TextInput
+          autoFocus
+          value={editValue}
+          onChangeText={setEditValue}
+          keyboardType="number-pad"
+          maxLength={values[0].length} // 2 for "00", matches your padStart
+          selectTextOnFocus
+          onBlur={commit}
+          onSubmitEditing={commit}
+          style={{
+            position: "absolute",
+            top: ITEM_HEIGHT,
+            left: 0,
+            right: 0,
+            height: ITEM_HEIGHT,
+            textAlign: "center",
+            fontSize: 26,
+            fontWeight: "600",
+            color: theme.colors.primary,
+            backgroundColor: theme.colors.background, // hide the wheel underneath
+            zIndex: 2,
+          }}
+        />
+      )}
     </View>
   );
 });
@@ -263,7 +313,7 @@ const styles = StyleSheet.create({
   },
   header: {
     fontSize: 16,
-    opacity: 0.6,
+    opacity: 0.8,
   },
   label: {
     fontSize: 14,
@@ -288,11 +338,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   item: {
-    height: ITEM_HEIGHT,
     width: ITEM_WIDTH,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 4,
+    height: ITEM_HEIGHT,
   },
   itemText: {
     textAlign: "center",

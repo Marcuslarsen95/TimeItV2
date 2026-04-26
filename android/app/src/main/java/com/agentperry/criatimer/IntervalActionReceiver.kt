@@ -1,4 +1,4 @@
-package com.agentperry.TimeItV2
+package com.agentperry.criatimer
 
 import android.content.BroadcastReceiver
 import android.content.Context

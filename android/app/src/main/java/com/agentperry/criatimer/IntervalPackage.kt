@@ -1,4 +1,4 @@
-package com.agentperry.TimeItV2
+package com.agentperry.criatimer
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule

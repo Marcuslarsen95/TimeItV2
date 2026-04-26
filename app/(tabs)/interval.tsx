@@ -63,11 +63,13 @@ export default function IntervalScreen() {
   const counterRef = useRef(0);
 
   const intervals = preferences.interval.segments;
-  const { main } = formatDateTimer(
-    // timer > 0 ? timer : intervals[0].durationSecs,
-    timer,
-    false,
-  );
+  // The first active interval's duration, in ms
+  const firstActive = intervals.find((i) => i.durationSecs > 0);
+  const firstIntervalMs = firstActive
+    ? convertToMs(firstActive.durationSecs, firstActive.unit)
+    : 0;
+
+  const { main } = formatDateTimer(timer > 0 ? timer : firstIntervalMs, false);
   const intervalPresets = presets.filter((p) => p.type === "interval");
   const selectedInterval =
     intervals.find((i) => i.id === editingId) || intervals[0];
@@ -446,10 +448,10 @@ export default function IntervalScreen() {
 
           <View style={styles.presetRow}>
             <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save Preset
+              Save for later
             </Button>
             <Button icon="bookmarks-outline" onPress={openPresets}>
-              Load Presets
+              Load saved
             </Button>
           </View>
         </DraggableSettings>

@@ -1,4 +1,4 @@
-package com.agentperry.TimeItV2
+package com.agentperry.criatimer
 
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.Arguments
@@ -192,7 +192,7 @@ class IntervalService : Service() {
         val notification = NotificationCompat.Builder(this, "alarm_channel")
             .setContentTitle("Time's up!")
             .setContentText("Your timer has finished.")
-            .setSmallIcon(R.drawable.notification_icon)
+            .setSmallIcon(R.drawable.notification_icon_cria)
             .setContentIntent(stopPending)
             .setDeleteIntent(deletePending)
             .setAutoCancel(true)
@@ -567,9 +567,9 @@ private fun buildNotification(isPaused: Boolean, remainingMs: Long): Notificatio
     }
 
     val builder = NotificationCompat.Builder(this, channelId)
-        .setSmallIcon(R.drawable.notification_icon)
+        .setSmallIcon(R.drawable.notification_icon_cria)
         .setContentIntent(contentPendingIntent)
-        .setColor(android.graphics.Color.parseColor("#3892B8"))
+        .setColor(android.graphics.Color.parseColor("#16191d"))
         .setColorized(true)
         .setOngoing(true)
         .setShowWhen(false)
