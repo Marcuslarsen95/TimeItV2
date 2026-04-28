@@ -183,6 +183,9 @@ export default function StopWatch() {
             isPaused={isPaused}
             isRunning={!!timer}
           />
+          <View>
+            <LapList laps={laps} onClear={handleClearLaps} />
+          </View>
           <ActionButtonsRow
             timerActive={timer > 0}
             isPaused={isPaused}
@@ -195,9 +198,6 @@ export default function StopWatch() {
             rightButtonLabel="Lap"
             rightButtonPress={pressLap}
           />
-          <View>
-            <LapList laps={laps} onClear={handleClearLaps} />
-          </View>
 
           <AppSnackbar
             visible={snackbar.visible}
@@ -213,24 +213,3 @@ export default function StopWatch() {
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  wheelContainer: {
-    borderRadius: 50,
-    width: "100%",
-    paddingHorizontal: 10,
-  },
-  presetRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    paddingTop: 10,
-    height: 40,
-    width: "100%",
-  },
-  modalHeader: {
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    gap: 20,
-  },
-});

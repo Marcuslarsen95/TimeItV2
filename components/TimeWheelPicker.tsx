@@ -7,10 +7,12 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
+  Keyboard,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { Text, useTheme } from "react-native-paper";
 
-const ITEM_HEIGHT = 35;
+const ITEM_HEIGHT = 45;
 const ITEM_WIDTH = 55;
 const VISIBLE_ITEMS = 3;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
@@ -38,7 +40,10 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = event.nativeEvent.contentOffset.y;
-    const index = Math.round(y / ITEM_HEIGHT);
+    const exact = y / ITEM_HEIGHT;
+    const index = Math.round(exact);
+    // Ignore offsets sitting on the half-step boundary
+    if (Math.abs(exact - index) > 0.25) return;
     if (index >= 0 && index < values.length && index !== localIndex) {
       setLocalIndex(index);
     }
@@ -60,10 +65,28 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
     const clamped = isNaN(parsed)
       ? localIndex
       : Math.max(0, Math.min(max, parsed));
-    setLocalIndex(clamped);
+    // setLocalIndex(clamped);
     onChange(clamped);
     setIsEditing(false);
   };
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      commit();
+    });
+    return () => sub.remove();
+  }, [isEditing, editValue]);
+
+  // inside Wheel, alongside your existing useEffect:
+  useFocusEffect(
+    React.useCallback(() => {
+      flatListRef.current?.scrollToOffset({
+        offset: selectedIndex * ITEM_HEIGHT,
+        animated: false,
+      });
+    }, [selectedIndex]),
+  );
 
   return (
     <View style={[styles.wheel]}>
@@ -127,7 +150,6 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
               onPress={() => {
                 setEditValue(item);
                 setIsEditing(true);
-                console.log("pressed");
               }}
             >
               <View
@@ -178,10 +200,16 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
             right: 0,
             height: ITEM_HEIGHT,
             textAlign: "center",
+            textAlignVertical: "center", // ← center vertically (Android only, but harmless on iOS)
+            padding: 0, // ← kill the default TextInput padding
+            includeFontPadding: false,
             fontSize: 26,
             fontWeight: "600",
             color: theme.colors.primary,
             backgroundColor: theme.colors.background, // hide the wheel underneath
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: theme.colors.primary,
             zIndex: 2,
           }}
         />

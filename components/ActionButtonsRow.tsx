@@ -1,6 +1,6 @@
-import { View } from "react-native";
+import { View, StyleSheet } from "react-native";
 import React from "react";
-import { IconButton, useTheme, Text } from "react-native-paper";
+import { Button } from "react-native-paper";
 
 interface ActionButtonProps {
   timerActive: boolean;
@@ -8,13 +8,15 @@ interface ActionButtonProps {
   withSkips?: boolean;
   pressPlay: () => void;
   pressPause: () => void;
-  leftButtonIcon: string;
+  leftButtonIcon?: string;
   leftButtonLabel: string;
   leftButtonPress: () => void;
-  rightButtonIcon: string;
+  rightButtonIcon?: string;
   rightButtonLabel: string;
   rightButtonPress: () => void;
 }
+
+const BUTTON_RADIUS = 24;
 
 const ActionButtonsRow = ({
   timerActive,
@@ -28,70 +30,102 @@ const ActionButtonsRow = ({
   rightButtonLabel,
   rightButtonPress,
 }: ActionButtonProps) => {
-  const theme = useTheme();
+  const onPrimaryPress = () => {
+    if (timerActive) {
+      pressPause();
+    } else {
+      pressPlay();
+    }
+  };
+
+  const primaryLabel = !timerActive ? "Start" : isPaused ? "Resume" : "Pause";
+  const primaryIcon = !timerActive ? "play" : isPaused ? "play" : "pause";
+
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: 24,
-        width: "100%",
-        borderRadius: 50,
-        // borderWidth: 1.5,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        overflow: "visible",
-      }}
-    >
-      <View style={{ alignItems: "center" }}>
-        <IconButton
-          icon={leftButtonIcon}
-          mode="outlined"
-          size={40}
-          onPress={leftButtonPress}
-          iconColor={theme.colors.secondary}
-          contentStyle={{}}
-          style={{ borderWidth: 0, marginBottom: -5 }}
-        />
-        <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
-          {leftButtonLabel}
-        </Text>
+    <View style={styles.container}>
+      {/* --- Top row: primary play/pause/resume button --- */}
+      <View style={styles.row}>
+        <Button
+          mode="contained"
+          icon={primaryIcon}
+          onPress={onPrimaryPress}
+          style={[styles.primaryButton, { borderRadius: BUTTON_RADIUS }]}
+          contentStyle={styles.primaryContent}
+          labelStyle={styles.primaryLabel}
+        >
+          {primaryLabel}
+        </Button>
       </View>
-      <View style={{ alignItems: "center" }}>
-        <IconButton
-          icon={isPaused ? "play" : "pause"}
-          mode="outlined"
-          size={64}
-          onPress={() => {
-            if (timerActive) {
-              pressPause();
-            } else {
-              pressPlay();
-            }
-          }}
-          iconColor={theme.colors.primary}
-          style={{ borderWidth: 0, marginBottom: -5 }}
-        />
-        {/* <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
-          {isPaused ? "play" : "pause"}
-        </Text> */}
-      </View>
-      <View style={{ alignItems: "center" }}>
-        <IconButton
-          icon={rightButtonIcon}
-          mode="outlined"
-          size={40}
-          onPress={rightButtonPress}
-          iconColor={theme.colors.secondary}
-          style={{ borderWidth: 0, marginBottom: -5 }}
-        />
-        <Text style={{ fontSize: 11, color: theme.colors.secondary }}>
-          {rightButtonLabel}
-        </Text>
-      </View>
+
+      {/* --- Bottom row: secondary actions (hidden when stopped) --- */}
+      {timerActive && (
+        <View style={styles.row}>
+          <Button
+            mode="contained-tonal"
+            icon={leftButtonIcon}
+            onPress={leftButtonPress}
+            style={[styles.sideButton, { borderRadius: BUTTON_RADIUS }]}
+            contentStyle={styles.sideContent}
+            labelStyle={styles.sideLabel}
+          >
+            {leftButtonLabel}
+          </Button>
+          <Button
+            mode="contained-tonal"
+            icon={rightButtonIcon}
+            onPress={rightButtonPress}
+            style={[styles.sideButton, { borderRadius: BUTTON_RADIUS }]}
+            contentStyle={styles.sideContent}
+            labelStyle={styles.sideLabel}
+          >
+            {rightButtonLabel}
+          </Button>
+        </View>
+      )}
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    gap: 10,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    gap: 10,
+  },
+  primaryButton: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  sideButton: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  primaryContent: {
+    height: 56,
+  },
+  sideContent: {
+    height: 48,
+  },
+  primaryLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  sideLabel: {
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+});
 
 export default ActionButtonsRow;

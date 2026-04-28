@@ -27,14 +27,12 @@ import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AppSnackbar from "@/components/AppSnackBar";
-import DraggableSettings from "@/components/DraggableTimerContainer";
 import SavePresetDialog from "@/components/SavePresetDialog";
 import PresetList from "@/components/PresetList";
 import TimeWheelPicker from "@/components/TimeWheelPicker";
 import TimerInfoBar from "@/components/TimerInfoBar";
 
 const { IntervalServiceModule } = NativeModules;
-const SHEET_HEIGHT = 0.45;
 
 type IntervalName = "Active" | "Pause" | "Transition";
 
@@ -47,7 +45,6 @@ export default function IntervalScreen() {
   const [currentInterval, setCurrentInterval] =
     useState<IntervalName>("Active");
   const [editingId, setEditingId] = useState(1);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [snackbar, setSnackbar] = useState({
@@ -127,7 +124,6 @@ export default function IntervalScreen() {
     try {
       setIsPaused(false);
       setTimer(0);
-      setIsSettingsOpen(false);
       counterRef.current = 0;
       IntervalServiceModule.startSequence(
         JSON.stringify(
@@ -275,15 +271,178 @@ export default function IntervalScreen() {
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-          <View style={{ flexDirection: "column" }}>
-            <TimerDisplay time={main} isPaused={isPaused} isRunning={!!timer} />
+          {timer === 0 && (
             <TimerInfoBar
               type="interval"
               segments={intervals}
               currentInterval={currentInterval}
               isRunning={!!timer}
             />
+          )}
+          <View style={styles.mainArea}>
+            {timer > 0 ? (
+              <View style={{ flexDirection: "column", alignItems: "center" }}>
+                <TimerDisplay
+                  time={main}
+                  isPaused={isPaused}
+                  isRunning={!!timer}
+                />
+                <TimerInfoBar
+                  type="interval"
+                  segments={intervals}
+                  currentInterval={currentInterval}
+                  isRunning={!!timer}
+                />
+              </View>
+            ) : (
+              <View style={{ width: "100%", alignItems: "center" }}>
+                <SegmentedButtons
+                  value={editingId.toString()}
+                  onValueChange={(val) => setEditingId(parseInt(val))}
+                  buttons={intervals.map((i) => {
+                    const isSelected = editingId === i.id;
+                    const isActive = i.durationSecs > 0;
+
+                    const bgColor = isSelected
+                      ? isActive
+                        ? theme.colors.primary
+                        : theme.colors.primaryContainer
+                      : isActive
+                        ? theme.colors.secondary
+                        : theme.colors.surfaceDisabled;
+
+                    const textColor = isSelected
+                      ? isActive
+                        ? theme.colors.onPrimary
+                        : theme.colors.onPrimaryContainer
+                      : isActive
+                        ? theme.colors.onSecondary
+                        : theme.colors.onSurfaceDisabled;
+
+                    return {
+                      value: i.id.toString(),
+                      label: i.durationSecs === 0 ? `${i.name} (off)` : i.name,
+                      checkedColor: textColor,
+                      uncheckedColor: textColor,
+                      style: {
+                        borderColor: isSelected
+                          ? theme.colors.primary
+                          : theme.colors.outlineVariant,
+                        borderWidth: isSelected ? 2 : 1,
+                        backgroundColor: bgColor,
+                        opacity: i.durationSecs > 0 ? 1 : 0.8,
+                        paddingHorizontal: 0,
+                      },
+                      labelStyle: {
+                        fontWeight: isSelected ? "900" : "600",
+                        fontSize: 12,
+                        color: textColor,
+                      },
+                    };
+                  })}
+                  style={{ width: "100%", marginBottom: 20 }}
+                />
+
+                <View style={{ width: "100%", position: "relative" }}>
+                  <View
+                    style={{
+                      opacity: selectedInterval.durationSecs > 0 ? 1 : 0.4,
+                    }}
+                  >
+                    <TimeWheelPicker
+                      valueInSeconds={selectedInterval.durationSecs}
+                      onChange={(newSeconds) =>
+                        setIntervals((prev) =>
+                          prev.map((i) =>
+                            i.id === selectedInterval.id
+                              ? { ...i, durationSecs: newSeconds }
+                              : i,
+                          ),
+                        )
+                      }
+                    />
+                  </View>
+
+                  {selectedInterval.durationSecs > 0 ? (
+                    <Button
+                      textColor={theme.colors.secondary}
+                      mode="outlined"
+                      onPress={() =>
+                        setIntervals((prev) =>
+                          prev.map((i) =>
+                            i.id === selectedInterval.id
+                              ? { ...i, durationSecs: 0 }
+                              : i,
+                          ),
+                        )
+                      }
+                      style={{
+                        width: 160,
+                        padding: 0,
+                        alignSelf: "center",
+                        marginTop: 10,
+                      }}
+                      labelStyle={{
+                        fontSize: 12,
+                        lineHeight: 12,
+                        color: theme.colors.secondary,
+                      }}
+                    >
+                      Disable {selectedInterval.name} timer
+                    </Button>
+                  ) : (
+                    <Pressable
+                      onPress={() =>
+                        setIntervals((prev) =>
+                          prev.map((i) =>
+                            i.id === selectedInterval.id
+                              ? { ...i, durationSecs: 30 }
+                              : i,
+                          ),
+                        )
+                      }
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: "50%",
+                        transform: [{ translateY: -20 }],
+                        height: 40,
+                        backgroundColor: theme.colors.surface + "EE",
+                        borderRadius: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: theme.colors.onSurface,
+                          fontSize: 12,
+                          opacity: 0.6,
+                        }}
+                      >
+                        Tap here to enable {selectedInterval.name} timer
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
+
+          {timer === 0 && (
+            <View style={styles.presetRow}>
+              <Button
+                icon="save-outline"
+                onPress={() => setShowSaveDialog(true)}
+              >
+                Save for later
+              </Button>
+              <Button icon="bookmarks-outline" onPress={openPresets}>
+                Load saved
+              </Button>
+            </View>
+          )}
 
           <ActionButtonsRow
             timerActive={!!timer}
@@ -308,153 +467,6 @@ export default function IntervalScreen() {
             }
           />
         </View>
-
-        <DraggableSettings
-          label="Timer Settings"
-          isTimerRunning={!!timer}
-          maxHeight={SHEET_HEIGHT}
-          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
-          isOpen={isSettingsOpen}
-        >
-          <SegmentedButtons
-            value={editingId.toString()}
-            onValueChange={(val) => setEditingId(parseInt(val))}
-            buttons={intervals.map((i) => {
-              const isSelected = editingId === i.id;
-              const isActive = i.durationSecs > 0;
-
-              const bgColor = isSelected
-                ? isActive
-                  ? theme.colors.primary
-                  : theme.colors.primaryContainer
-                : isActive
-                  ? theme.colors.secondary
-                  : theme.colors.surfaceDisabled;
-
-              const textColor = isSelected
-                ? isActive
-                  ? theme.colors.onPrimary
-                  : theme.colors.onPrimaryContainer
-                : isActive
-                  ? theme.colors.onSecondary
-                  : theme.colors.onSurfaceDisabled;
-
-              return {
-                value: i.id.toString(),
-                label: i.durationSecs === 0 ? `${i.name} (off)` : i.name,
-                checkedColor: textColor,
-                uncheckedColor: textColor,
-                style: {
-                  borderColor: isSelected
-                    ? theme.colors.primary
-                    : theme.colors.outlineVariant,
-                  borderWidth: isSelected ? 2 : 1,
-                  backgroundColor: bgColor,
-                  opacity: i.durationSecs > 0 ? 1 : 0.8,
-                },
-                labelStyle: {
-                  fontWeight: isSelected ? "900" : "600",
-                  fontSize: 12,
-                  color: textColor,
-                },
-              };
-            })}
-            style={{ width: "100%", marginBottom: 20 }}
-          />
-
-          <View style={{ width: "100%" }}>
-            <View style={{ position: "relative" }}>
-              <View
-                style={{ opacity: selectedInterval.durationSecs > 0 ? 1 : 0.4 }}
-              >
-                <TimeWheelPicker
-                  label="Set intervals"
-                  valueInSeconds={selectedInterval.durationSecs}
-                  onChange={(newSeconds) =>
-                    setIntervals((prev) =>
-                      prev.map((i) =>
-                        i.id === selectedInterval.id
-                          ? { ...i, durationSecs: newSeconds }
-                          : i,
-                      ),
-                    )
-                  }
-                />
-              </View>
-
-              {selectedInterval.durationSecs > 0 ? (
-                <Button
-                  textColor={theme.colors.secondary}
-                  mode="outlined"
-                  onPress={() =>
-                    setIntervals((prev) =>
-                      prev.map((i) =>
-                        i.id === selectedInterval.id
-                          ? { ...i, durationSecs: 0 }
-                          : i,
-                      ),
-                    )
-                  }
-                  style={{
-                    width: 160,
-                    padding: 0,
-                    alignSelf: "center",
-                  }}
-                  labelStyle={{
-                    fontSize: 12,
-                    lineHeight: 12,
-                    color: theme.colors.secondary,
-                  }}
-                >
-                  Disable {selectedInterval.name} timer
-                </Button>
-              ) : (
-                <Pressable
-                  onPress={() =>
-                    setIntervals((prev) =>
-                      prev.map((i) =>
-                        i.id === selectedInterval.id
-                          ? { ...i, durationSecs: 30 }
-                          : i,
-                      ),
-                    )
-                  }
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    right: 0,
-                    top: "50%",
-                    transform: [{ translateY: -20 }],
-                    height: 40,
-                    backgroundColor: theme.colors.surface + "EE",
-                    borderRadius: 8,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: theme.colors.onSurface,
-                      fontSize: 12,
-                      opacity: 0.6,
-                    }}
-                  >
-                    Tap here to enable {selectedInterval.name} timer
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.presetRow}>
-            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save for later
-            </Button>
-            <Button icon="bookmarks-outline" onPress={openPresets}>
-              Load saved
-            </Button>
-          </View>
-        </DraggableSettings>
       </View>
 
       <Portal>
@@ -503,12 +515,17 @@ export default function IntervalScreen() {
 }
 
 const styles = StyleSheet.create({
+  mainArea: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   presetRow: {
     flexDirection: "row",
     justifyContent: "center",
-    paddingTop: 10,
-    height: 40,
-    width: "100%",
+    maxWidth: 300,
+    gap: 10,
   },
   modalHeader: {
     flexDirection: "column",

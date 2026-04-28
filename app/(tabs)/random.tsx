@@ -25,11 +25,10 @@ import AppSnackbar from "@/components/AppSnackBar";
 import SavePresetDialog from "@/components/SavePresetDialog";
 import PresetList from "@/components/PresetList";
 import TimeWheelPicker from "@/components/TimeWheelPicker";
-import DraggableSettings from "@/components/DraggableTimerContainer";
 import TimerInfoBar from "@/components/TimerInfoBar";
+import AlarmActiveView from "@/components/AlarmActiveView";
 
 const { IntervalServiceModule } = NativeModules;
-const SHEET_HEIGHT = 0.5;
 
 export default function RandomScreen() {
   const theme = useTheme();
@@ -37,9 +36,9 @@ export default function RandomScreen() {
   // --- State ---
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(true);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [isAlarmActive, setIsAlarmActive] = useState(false);
   const [snackbar, setSnackbar] = useState({
     visible: false,
     message: "",
@@ -96,7 +95,6 @@ export default function RandomScreen() {
     try {
       updatePreference("hasCompletedSetup", true);
       setIsPaused(false);
-      setIsSettingsOpen(false);
       const randomTime = getRandomMs(minSecs * 1000, maxSecs * 1000);
       IntervalServiceModule.startSequence(
         JSON.stringify([{ name: "Random", durationMs: randomTime }]),
@@ -133,6 +131,14 @@ export default function RandomScreen() {
     }
   };
 
+  const stopAlarm = () => {
+    try {
+      IntervalServiceModule.stopAlarm();
+    } catch (e) {
+      showSnackbar("Failed to stop alarm", true);
+    }
+  };
+
   // --- Presets ---
   const handleSavePreset = async (name: string) => {
     await savePreset(name, "random", { minSecs, maxSecs });
@@ -162,7 +168,12 @@ export default function RandomScreen() {
           isRunning: boolean;
           isPaused: boolean;
           timerType: string;
+          isAlarmRinging?: boolean;
         }) => {
+          if (state.timerType === "random" && state.isAlarmRinging) {
+            setIsAlarmActive(true);
+            return;
+          }
           if (state.timerType !== "random" || !state.isRunning) return;
           setIsPaused(state.isPaused);
         },
@@ -200,16 +211,60 @@ export default function RandomScreen() {
         setTimer(0);
       },
     );
+    const subAlarmStart = DeviceEventEmitter.addListener(
+      "AlarmStarted",
+      (data) => {
+        if (data?.timerType !== "random") return;
+        setIsAlarmActive(true);
+      },
+    );
+    const subAlarmStop = DeviceEventEmitter.addListener(
+      "AlarmStopped",
+      (data) => {
+        if (data?.timerType !== "random") return;
+        setIsAlarmActive(false);
+      },
+    );
 
     return () => {
       subUpdate.remove();
       subPause.remove();
       subResume.remove();
       subStop.remove();
+      subAlarmStart.remove();
+      subAlarmStop.remove();
     };
   }, []);
 
   // --- Render ---
+  if (isAlarmActive) {
+    return (
+      <GestureHandlerRootView style={layout.GestureRoot}>
+        <View style={layout.outerContainer}>
+          <View style={layout.mainContainer}>
+            <StatusBadge
+              statusLabel="TIME'S UP"
+              statusColor={theme.colors.error}
+              statusIcon="alarm"
+            />
+            <AlarmActiveView onStop={stopAlarm} />
+            <AppSnackbar
+              visible={snackbar.visible}
+              message={snackbar.message}
+              onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+              color={
+                snackbar.isError ? theme.colors.error : theme.colors.primary
+              }
+              textColor={
+                snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+              }
+            />
+          </View>
+        </View>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={layout.GestureRoot}>
       <View style={layout.outerContainer}>
@@ -219,15 +274,51 @@ export default function RandomScreen() {
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-          <View style={{ flexDirection: "column" }}>
-            <TimerDisplay
-              time="??:??"
-              isPaused={isPaused}
-              isRunning={!!timer}
-              isRandom={true}
-            />
-            <TimerInfoBar type="random" minSecs={minSecs} maxSecs={maxSecs} />
+
+          <View style={styles.mainArea}>
+            {timer > 0 ? (
+              <View style={{ flexDirection: "column", alignItems: "center" }}>
+                <TimerDisplay
+                  time="??:??"
+                  isPaused={isPaused}
+                  isRunning={!!timer}
+                  isRandom={true}
+                />
+                <TimerInfoBar
+                  type="random"
+                  minSecs={minSecs}
+                  maxSecs={maxSecs}
+                />
+              </View>
+            ) : (
+              <View style={{ width: "100%", alignItems: "center" }}>
+                <TimeWheelPicker
+                  label="Between"
+                  valueInSeconds={minSecs}
+                  onChange={setMinSecs}
+                />
+                <TimeWheelPicker
+                  label="And"
+                  valueInSeconds={maxSecs}
+                  onChange={setMaxSecs}
+                />
+              </View>
+            )}
           </View>
+
+          {timer === 0 && (
+            <View style={styles.presetRow}>
+              <Button
+                icon="save-outline"
+                onPress={() => setShowSaveDialog(true)}
+              >
+                Save for later
+              </Button>
+              <Button icon="bookmarks-outline" onPress={openPresets}>
+                Load saved
+              </Button>
+            </View>
+          )}
 
           <ActionButtonsRow
             timerActive={timer > 0}
@@ -252,35 +343,6 @@ export default function RandomScreen() {
             }
           />
         </View>
-
-        <DraggableSettings
-          label="Timer Settings"
-          isTimerRunning={!!timer}
-          maxHeight={SHEET_HEIGHT}
-          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
-          isOpen={isSettingsOpen}
-        >
-          <View style={styles.wheelContainer}>
-            <TimeWheelPicker
-              label="Between"
-              valueInSeconds={minSecs}
-              onChange={setMinSecs}
-            />
-            <TimeWheelPicker
-              label="And"
-              valueInSeconds={maxSecs}
-              onChange={setMaxSecs}
-            />
-          </View>
-          <View style={styles.presetRow}>
-            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save for later
-            </Button>
-            <Button icon="bookmarks-outline" onPress={openPresets}>
-              Load saved
-            </Button>
-          </View>
-        </DraggableSettings>
       </View>
 
       <Portal>
@@ -331,17 +393,17 @@ export default function RandomScreen() {
 }
 
 const styles = StyleSheet.create({
-  wheelContainer: {
-    borderRadius: 50,
+  mainArea: {
+    flex: 1,
     width: "100%",
-    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   presetRow: {
     flexDirection: "row",
     justifyContent: "center",
-    paddingTop: 10,
-    height: 40,
-    width: "100%",
+    maxWidth: 300,
+    gap: 10,
   },
   modalHeader: {
     flexDirection: "column",

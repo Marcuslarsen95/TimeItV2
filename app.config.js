@@ -19,6 +19,7 @@ export default {
       package: "com.agentperry.criatimer",
       backgroundColor: "#16191d",
       allowBackup: true,
+      softwareKeyboardLayoutMode: "pan",
     },
     androidStatusBar: {
       translucent: true,

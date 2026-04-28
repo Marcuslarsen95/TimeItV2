@@ -33,6 +33,7 @@ class IntervalService : Service() {
         var remainingBeforePause: Long = 0L
         var instance: IntervalService? = null
         var shouldLoop: Boolean = false
+        var isAlarmRinging: Boolean = false
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -65,6 +66,23 @@ class IntervalService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent == null) return START_STICKY
 
+    // 0. HANDLE TIMER TYPE SWITCH
+    // If a startSequence call is coming in for a *different* timer type while
+    // another timer is currently running, emit a stop event for the previous
+    // type so its JS screen can reset its local state. Otherwise the previous
+    // screen keeps stale `timer` / `isPaused` values and tapping play later
+    // sends a `toggle` into a service that no longer matches.
+    val incomingTimerType = intent.getStringExtra("timerType")
+    val isStartIntent = intent.hasExtra("intervals") && intent.getBooleanExtra("start", false)
+    if (isStartIntent && isRunning && incomingTimerType != null && incomingTimerType != timerType) {
+        sendStoppedToJS()                       // emits with the *previous* timerType
+        handler.removeCallbacks(tickRunnable)
+        isRunning = false
+        isPaused = false
+        intervals = emptyList()
+        currentIndex = 0
+        remainingBeforePause = 0L
+    }
 
     if (intent.hasExtra("timerType")) {
         timerType = intent.getStringExtra("timerType") ?: "interval"
@@ -101,10 +119,7 @@ class IntervalService : Service() {
         "ACTION_SKIP_FORWARD" -> { skipForward(10000.0); return START_STICKY }
         "ACTION_LAP" -> { recordLap(); return START_STICKY }
         "ACTION_STOP_ALARM" -> {
-            alarmPlayer?.stop()
-            alarmPlayer?.release()
-            alarmPlayer = null
-            getSystemService(NotificationManager::class.java).cancel(2)
+            stopAlarmInternal()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -169,7 +184,16 @@ class IntervalService : Service() {
             Log.d("AlarmNotif", "Channel created")
         }
 
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        // Deep-link the user back into the screen that fired the alarm.
+        // Routes: countdown == "/" (root tab), random == "/random".
+        val launchUri = when (timerType) {
+            "random" -> android.net.Uri.parse("cria-timer://random")
+            else -> android.net.Uri.parse("cria-timer://")
+        }
+        val launchIntent = Intent(Intent.ACTION_VIEW, launchUri).apply {
+            setPackage(packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
         val contentPendingIntent = PendingIntent.getActivity(
             this, 0, launchIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -193,13 +217,13 @@ class IntervalService : Service() {
             .setContentTitle("Time's up!")
             .setContentText("Your timer has finished.")
             .setSmallIcon(R.drawable.notification_icon_cria)
-            .setContentIntent(stopPending)
+            .setContentIntent(contentPendingIntent)
             .setDeleteIntent(deletePending)
-            .setAutoCancel(true)
+            .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(R.drawable.stop_vector, "Stop", stopPending)  // ← add this
+            .addAction(R.drawable.stop_vector, "Stop", stopPending)
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)
@@ -224,11 +248,56 @@ class IntervalService : Service() {
             prepare()
             start()
         }
+        isAlarmRinging = true
+        sendAlarmStartedToJS()
+    }
+
+    /**
+     * Stop the looping alarm sound, cancel the alarm notification,
+     * and notify the JS side. Safe to call when the alarm isn't ringing.
+     */
+    internal fun stopAlarmInternal() {
+        try {
+            alarmPlayer?.stop()
+        } catch (_: IllegalStateException) {
+            // already stopped — ignore
+        }
+        alarmPlayer?.release()
+        alarmPlayer = null
+        getSystemService(NotificationManager::class.java).cancel(2)
+        if (isAlarmRinging) {
+            isAlarmRinging = false
+            sendAlarmStoppedToJS()
+        }
+    }
+
+    internal fun sendAlarmStartedToJS() {
+        val ctx = reactContext ?: return
+        val params = Arguments.createMap().apply {
+            putString("timerType", timerType)
+        }
+        ctx
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("AlarmStarted", params)
+    }
+
+    internal fun sendAlarmStoppedToJS() {
+        val ctx = reactContext ?: return
+        val params = Arguments.createMap().apply {
+            putString("timerType", timerType)
+        }
+        ctx
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("AlarmStopped", params)
     }
 
 
 
     internal fun pauseEngine() {
+        if (intervals.isEmpty() || currentIndex !in intervals.indices) {
+            Log.w("IntervalService", "pauseEngine called with no active sequence; ignoring")
+            return
+        }
         isPaused = true
         val now = System.currentTimeMillis()
         val current = intervals[currentIndex]
@@ -244,16 +313,20 @@ class IntervalService : Service() {
     }
 
     internal fun resumeEngine() {
+        if (intervals.isEmpty() || currentIndex !in intervals.indices) {
+            Log.w("IntervalService", "resumeEngine called with no active sequence; ignoring")
+            return
+        }
         isRunning = true
         isPaused = false
         sendResumedToJS()
-        
+
         // Calculate start time based on the saved remaining time
-        intervalStartTime = System.currentTimeMillis() - 
+        intervalStartTime = System.currentTimeMillis() -
             (intervals[currentIndex].durationMs - remainingBeforePause)
-        
+
         // Reset this so it doesn't interfere with future skips
-        remainingBeforePause = 0L 
+        remainingBeforePause = 0L
 
         handler.post(tickRunnable)
         // ... rest of your code
@@ -345,11 +418,14 @@ class IntervalService : Service() {
 
 
     internal fun startEngine() {
+        // Silence any leftover alarm from a previous sequence before starting fresh
+        stopAlarmInternal()
+
         isRunning = true
         isPaused = false
         remainingBeforePause = 0L
         currentIndex = 0
-        lastBeepSecond = -1L 
+        lastBeepSecond = -1L
         intervalStartTime = System.currentTimeMillis()
         handler.post(tickRunnable)
     }
@@ -361,6 +437,7 @@ class IntervalService : Service() {
         currentIndex = 0
         intervalStartTime = 0L
         remainingBeforePause = 0L
+        intervals = emptyList()
     }
 
 

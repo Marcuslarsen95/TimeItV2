@@ -92,13 +92,23 @@ class IntervalModule(reactContext: ReactApplicationContext) :
         map.putBoolean("isPaused", IntervalService.isPaused)
         map.putString("timerType", IntervalService.timerType)
         map.putDouble("remainingMs", IntervalService.remainingBeforePause.toDouble())
+        map.putBoolean("isAlarmRinging", IntervalService.isAlarmRinging)
         promise.resolve(map)
     }
-    @ReactMethod 
+    @ReactMethod
     fun lap() {
         val context = reactApplicationContext
         val intent = Intent(context, IntervalService::class.java)
         intent.putExtra("lap", true)
+        context.startService(intent)
+    }
+
+    @ReactMethod
+    fun stopAlarm() {
+        val context = reactApplicationContext
+        val intent = Intent(context, IntervalService::class.java).apply {
+            action = "ACTION_STOP_ALARM"
+        }
         context.startService(intent)
     }
 

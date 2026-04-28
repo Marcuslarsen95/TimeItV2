@@ -23,14 +23,12 @@ import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AppSnackbar from "@/components/AppSnackBar";
-import DraggableSettings from "@/components/DraggableTimerContainer";
 import PresetList from "@/components/PresetList";
 import SavePresetDialog from "@/components/SavePresetDialog";
-import TimerInfoBar from "@/components/TimerInfoBar";
 import TimeWheelPicker from "@/components/TimeWheelPicker";
+import AlarmActiveView from "@/components/AlarmActiveView";
 
 const { IntervalServiceModule } = NativeModules;
-const SHEET_HEIGHT = 0.35;
 
 export default function SimpleTimer() {
   const theme = useTheme();
@@ -39,9 +37,9 @@ export default function SimpleTimer() {
   const [timer, setTimer] = useState(0);
   const [isPaused, setIsPaused] = useState(true);
   const [inputTimeSecs, setInputTimeSecs] = useState(60);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [isAlarmActive, setIsAlarmActive] = useState(false);
   const [snackbar, setSnackbar] = useState({
     visible: false,
     message: "",
@@ -91,7 +89,6 @@ export default function SimpleTimer() {
       return;
     }
     try {
-      setIsSettingsOpen(false);
       setIsPaused(false);
       IntervalServiceModule.startSequence(
         JSON.stringify([
@@ -130,6 +127,14 @@ export default function SimpleTimer() {
     }
   };
 
+  const stopAlarm = () => {
+    try {
+      IntervalServiceModule.stopAlarm();
+    } catch (e) {
+      showSnackbar("Failed to stop alarm", true);
+    }
+  };
+
   // --- Presets ---
   const handleSavePreset = async (name: string) => {
     await savePreset(name, "countdown", { duration: inputTimeSecs });
@@ -158,7 +163,12 @@ export default function SimpleTimer() {
           isRunning: boolean;
           isPaused: boolean;
           timerType: string;
+          isAlarmRinging?: boolean;
         }) => {
+          if (state.timerType === "countdown" && state.isAlarmRinging) {
+            setIsAlarmActive(true);
+            return;
+          }
           if (state.timerType !== "countdown" || !state.isRunning) return;
           setIsPaused(state.isPaused);
         },
@@ -196,16 +206,60 @@ export default function SimpleTimer() {
         setTimer(0);
       },
     );
+    const subAlarmStart = DeviceEventEmitter.addListener(
+      "AlarmStarted",
+      (data) => {
+        if (data?.timerType !== "countdown") return;
+        setIsAlarmActive(true);
+      },
+    );
+    const subAlarmStop = DeviceEventEmitter.addListener(
+      "AlarmStopped",
+      (data) => {
+        if (data?.timerType !== "countdown") return;
+        setIsAlarmActive(false);
+      },
+    );
 
     return () => {
       subUpdate.remove();
       subPause.remove();
       subResume.remove();
       subStop.remove();
+      subAlarmStart.remove();
+      subAlarmStop.remove();
     };
   }, []);
 
   // --- Render ---
+  if (isAlarmActive) {
+    return (
+      <GestureHandlerRootView style={layout.GestureRoot}>
+        <View style={layout.outerContainer}>
+          <View style={layout.mainContainer}>
+            <StatusBadge
+              statusLabel="TIME'S UP"
+              statusColor={theme.colors.error}
+              statusIcon="alarm-outline"
+            />
+            <AlarmActiveView onStop={stopAlarm} />
+            <AppSnackbar
+              visible={snackbar.visible}
+              message={snackbar.message}
+              onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
+              color={
+                snackbar.isError ? theme.colors.error : theme.colors.primary
+              }
+              textColor={
+                snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+              }
+            />
+          </View>
+        </View>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={layout.GestureRoot}>
       <View style={layout.outerContainer}>
@@ -215,7 +269,36 @@ export default function SimpleTimer() {
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-          <TimerDisplay time={main} isPaused={isPaused} isRunning={!!timer} />
+
+          <View style={styles.mainArea}>
+            {timer > 0 ? (
+              <TimerDisplay
+                time={main}
+                isPaused={isPaused}
+                isRunning={!!timer}
+              />
+            ) : (
+              <TimeWheelPicker
+                valueInSeconds={inputTimeSecs}
+                onChange={setInputTimeSecs}
+              />
+            )}
+          </View>
+
+          {timer === 0 && (
+            <View style={styles.presetRow}>
+              <Button
+                icon="save-outline"
+                onPress={() => setShowSaveDialog(true)}
+              >
+                Save for later
+              </Button>
+              <Button icon="bookmarks-outline" onPress={openPresets}>
+                Load saved
+              </Button>
+            </View>
+          )}
+
           <ActionButtonsRow
             timerActive={timer > 0}
             isPaused={isPaused}
@@ -228,7 +311,7 @@ export default function SimpleTimer() {
             rightButtonLabel="10s"
             rightButtonPress={skipForward}
           />
-          {/* <TimerInfoBar type="countdown" durationSecs={inputTimeSecs} /> */}
+
           <AppSnackbar
             visible={snackbar.visible}
             message={snackbar.message}
@@ -239,30 +322,6 @@ export default function SimpleTimer() {
             }
           />
         </View>
-
-        <DraggableSettings
-          label="Timer Settings"
-          isTimerRunning={!!timer}
-          maxHeight={SHEET_HEIGHT}
-          onOpenChange={() => setIsSettingsOpen(!isSettingsOpen)}
-          isOpen={isSettingsOpen}
-        >
-          <View style={styles.wheelContainer}>
-            <TimeWheelPicker
-              label="Set timer duration"
-              valueInSeconds={inputTimeSecs}
-              onChange={setInputTimeSecs}
-            />
-          </View>
-          <View style={styles.presetRow}>
-            <Button icon="save-outline" onPress={() => setShowSaveDialog(true)}>
-              Save for later
-            </Button>
-            <Button icon="bookmarks-outline" onPress={openPresets}>
-              Load saved
-            </Button>
-          </View>
-        </DraggableSettings>
       </View>
 
       <Portal>
@@ -312,17 +371,17 @@ export default function SimpleTimer() {
 }
 
 const styles = StyleSheet.create({
-  wheelContainer: {
-    borderRadius: 50,
+  mainArea: {
+    flex: 1,
     width: "100%",
-    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   presetRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    paddingTop: 10,
-    height: 40,
-    width: "100%",
+    justifyContent: "space-between",
+    maxWidth: 300,
+    gap: 10,
   },
   modalHeader: {
     flexDirection: "column",
