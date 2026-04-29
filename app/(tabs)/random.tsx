@@ -245,7 +245,7 @@ export default function RandomScreen() {
             <StatusBadge
               statusLabel="TIME'S UP"
               statusColor={theme.colors.error}
-              statusIcon="alarm"
+              statusIcon="notifications-sharp"
             />
             <AlarmActiveView onStop={stopAlarm} />
             <AppSnackbar

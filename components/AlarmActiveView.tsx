@@ -31,7 +31,7 @@ const AlarmActiveView = ({
       </Text>
       <Button
         mode="contained"
-        icon="notifications-off-outline"
+        icon="notifications-off-sharp"
         onPress={onStop}
         buttonColor={theme.colors.error}
         textColor={theme.colors.onError}

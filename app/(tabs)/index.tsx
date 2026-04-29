@@ -240,7 +240,7 @@ export default function SimpleTimer() {
             <StatusBadge
               statusLabel="TIME'S UP"
               statusColor={theme.colors.error}
-              statusIcon="alarm-outline"
+              statusIcon="notifications-sharp"
             />
             <AlarmActiveView onStop={stopAlarm} />
             <AppSnackbar

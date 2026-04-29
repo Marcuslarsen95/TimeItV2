@@ -2,13 +2,18 @@ import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Platform, View } from "react-native";
 import { PaperProvider, MD3DarkTheme, MD3LightTheme } from "react-native-paper";
-import { useMaterial3Theme } from "@pchmn/expo-material3-theme";
-import { useEffect, useState } from "react";
+import { createMaterial3Theme } from "@pchmn/expo-material3-theme";
+import { useEffect, useMemo, useState } from "react";
 import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { StatusBar } from "expo-status-bar";
 import * as NavigationBar from "expo-navigation-bar";
+import {
+  UserPreferencesProvider,
+  useUserPreferences,
+} from "@/hooks/use-user-preferences";
+import { DEFAULT_THEME_COLOR } from "@/constants/theme-colors";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -21,6 +26,14 @@ Notifications.setNotificationHandler({
 });
 
 export default function RootLayout() {
+  return (
+    <UserPreferencesProvider>
+      <RootLayoutInner />
+    </UserPreferencesProvider>
+  );
+}
+
+function RootLayoutInner() {
   const colorScheme = useColorScheme(); // detects "dark" or "light";
 
   const [loaded] = useFonts({
@@ -58,10 +71,12 @@ export default function RootLayout() {
     }
   }, []);
 
-  const [userColor, setUserColor] = useState("#e9b570");
-  const { theme: md3Theme } = useMaterial3Theme({
-    sourceColor: userColor,
-  });
+  const { preferences } = useUserPreferences();
+  const userColor = preferences.themeColor || DEFAULT_THEME_COLOR;
+  // Compute the M3 palette directly so it derives from userColor
+  // (the stateful useMaterial3Theme hook only uses sourceColor for its
+  // initial value and doesn't re-run on prop changes)
+  const md3Theme = useMemo(() => createMaterial3Theme(userColor), [userColor]);
 
   const theme =
     colorScheme === "dark"
