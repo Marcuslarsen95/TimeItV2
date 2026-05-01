@@ -89,7 +89,9 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
   );
 
   return (
-    <View style={[styles.wheel]}>
+    <View
+      style={[styles.wheel, { borderColor: theme.colors.onBackground + "22" }]}
+    >
       <View
         pointerEvents="none"
         style={[
@@ -110,7 +112,7 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
           height: ITEM_HEIGHT,
           borderTopWidth: 1,
           borderBottomWidth: 1,
-          borderColor: theme.colors.primary,
+          borderColor: theme.colors.primary + "05",
           zIndex: 1,
         }}
       />
@@ -157,8 +159,8 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
                   styles.item,
                   {
                     transform: [
-                      { scaleY: isSelected ? scaleY : scaleY * 0.7 },
-                      { scaleX: isSelected ? 1 : 0.7 },
+                      { scaleY: isSelected ? scaleY : scaleY * 0.9 },
+                      { scaleX: isSelected ? 1 : 1 },
                     ],
                   },
                 ]}
@@ -170,9 +172,12 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
                       color: isSelected
                         ? theme.colors.primary
                         : theme.colors.secondary,
-                      fontSize: isSelected ? 26 : 18,
+                      fontSize: isSelected ? 26 : 22,
                       fontWeight: isSelected ? "600" : "400",
                       opacity,
+                      backgroundColor: isSelected
+                        ? theme.colors.secondary + "33"
+                        : theme.colors.secondary + "26",
                     },
                   ]}
                 >
@@ -207,9 +212,9 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
             fontWeight: "600",
             color: theme.colors.primary,
             backgroundColor: theme.colors.background, // hide the wheel underneath
-            borderTopWidth: 1,
-            borderBottomWidth: 1,
-            borderColor: theme.colors.primary,
+            // borderTopWidth: 1,
+            // borderBottomWidth: 1,
+            // borderColor: theme.colors.primary,
             zIndex: 2,
           }}
         />
@@ -288,7 +293,12 @@ export default function TimeWheelPicker({
   return (
     <View style={styles.container}>
       {label && <Text style={styles.header}>{label}</Text>}
-      <View style={[styles.wheelsContainer]}>
+      <View
+        style={[
+          styles.wheelsContainer,
+          { borderColor: theme.colors.onBackground + "22" },
+        ]}
+      >
         <View style={styles.wheelContainer}>
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Hours
@@ -300,9 +310,15 @@ export default function TimeWheelPicker({
             onChange={onHoursChange}
           />
         </View>
-        <Text style={[styles.separator, { color: theme.colors.primary }]}>
+        {/* <Text style={[styles.separator, { color: theme.colors.primary }]}>
           :
-        </Text>
+        </Text> */}
+        <View
+          style={[
+            styles.separator,
+            { backgroundColor: theme.colors.onBackground + "22" },
+          ]}
+        />
         <View style={styles.wheelContainer}>
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Minutes
@@ -314,9 +330,15 @@ export default function TimeWheelPicker({
             onChange={onMinutesChange}
           />
         </View>
-        <Text style={[styles.separator, { color: theme.colors.primary }]}>
+        {/* <Text style={[styles.separator, { color: theme.colors.primary }]}>
           :
-        </Text>
+        </Text> */}
+        <View
+          style={[
+            styles.separator,
+            { backgroundColor: theme.colors.onBackground + "22" },
+          ]}
+        />
         <View style={styles.wheelContainer}>
           <Text style={[styles.label, { color: theme.colors.primary }]}>
             Seconds
@@ -353,7 +375,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 10,
-    borderRadius: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderLeftWidth: 1.5,
   },
   wheelContainer: {
     flexDirection: "column",
@@ -364,6 +389,8 @@ const styles = StyleSheet.create({
     height: PICKER_HEIGHT,
     width: ITEM_WIDTH,
     overflow: "hidden",
+    marginTop: 6,
+    borderTopWidth: 1,
   },
   item: {
     width: ITEM_WIDTH,
@@ -377,11 +404,16 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 5,
   },
+  // separator: {
+  //   fontSize: 24,
+  //   fontWeight: "900",
+  //   marginHorizontal: 2,
+  //   paddingTop: 12,
+  // },
   separator: {
-    fontSize: 24,
-    fontWeight: "900",
-    marginHorizontal: 2,
-    paddingTop: 12,
+    width: 1.5,
+    height: "100%",
+    marginHorizontal: 6,
   },
   indicatorContainer: {
     ...StyleSheet.absoluteFillObject,

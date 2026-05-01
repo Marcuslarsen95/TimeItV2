@@ -14,6 +14,7 @@ import {
   IconButton,
   SegmentedButtons,
   Text,
+  TextInput,
 } from "react-native-paper";
 import { useSharedValue } from "react-native-reanimated";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -21,6 +22,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { layout } from "@/styles/layout";
 import { formatDateTimer, convertToMs } from "../../utils/HelperFunctions";
 import { Interval, useUserPreferences } from "@/hooks/use-user-preferences";
+import { useProStatus } from "@/hooks/use-pro-status";
 import { useWorkoutPresets } from "@/hooks/use-workout-presets";
 
 import ActionButtonsRow from "@/components/ActionButtonsRow";
@@ -52,9 +54,12 @@ export default function IntervalScreen() {
     message: "",
     isError: false,
   });
+  const [repeatCount, setRepeatCount] = useState("1");
+  const [editingRepeat, setIsEditingRepeat] = useState(false);
 
   // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
+  const { isPro } = useProStatus();
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
   const progress = useSharedValue(0);
   const counterRef = useRef(0);
@@ -134,6 +139,7 @@ export default function IntervalScreen() {
         ),
         true,
         "interval",
+        isPro && preferences.voicePromptsEnabled,
       );
     } catch (e) {
       showSnackbar("Failed to start timer, please try again", true);
@@ -343,10 +349,17 @@ export default function IntervalScreen() {
                   style={{ width: "100%", marginBottom: 20 }}
                 />
 
-                <View style={{ width: "100%", position: "relative" }}>
+                <View
+                  style={{
+                    width: "100%",
+                    position: "relative",
+                  }}
+                >
                   <View
                     style={{
                       opacity: selectedInterval.durationSecs > 0 ? 1 : 0.4,
+                      flexDirection: "column",
+                      alignItems: "center",
                     }}
                   >
                     <TimeWheelPicker
@@ -408,7 +421,7 @@ export default function IntervalScreen() {
                         top: "50%",
                         transform: [{ translateY: -20 }],
                         height: 40,
-                        backgroundColor: theme.colors.surface + "EE",
+                        backgroundColor: theme.colors.secondary,
                         borderRadius: 8,
                         alignItems: "center",
                         justifyContent: "center",
@@ -416,9 +429,9 @@ export default function IntervalScreen() {
                     >
                       <Text
                         style={{
-                          color: theme.colors.onSurface,
+                          color: theme.colors.onSecondary,
                           fontSize: 12,
-                          opacity: 0.6,
+                          opacity: 1,
                         }}
                       >
                         Tap here to enable {selectedInterval.name} timer
@@ -426,6 +439,26 @@ export default function IntervalScreen() {
                     </Pressable>
                   )}
                 </View>
+                <Text
+                  variant="labelMedium"
+                  style={{ marginBottom: 5, marginTop: 10 }}
+                >
+                  Set repeats:
+                </Text>
+                <TextInput
+                  mode="outlined"
+                  value={repeatCount}
+                  onChangeText={(text) =>
+                    setRepeatCount(text.replace(/[^0-9]/g, ""))
+                  }
+                  keyboardType="number-pad"
+                  maxLength={3}
+                  onBlur={() => setIsEditingRepeat(false)}
+                  onFocus={() => {
+                    setIsEditingRepeat(true);
+                  }}
+                  style={{ width: 75, height: 40, textAlign: "center" }}
+                />
               </View>
             )}
           </View>

@@ -17,6 +17,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { layout } from "../../styles/layout";
 import { formatDateTimer } from "../../utils/HelperFunctions";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useProStatus } from "@/hooks/use-pro-status";
 import { useWorkoutPresets } from "@/hooks/use-workout-presets";
 
 import ActionButtonsRow from "@/components/ActionButtonsRow";
@@ -48,6 +49,7 @@ export default function SimpleTimer() {
 
   // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
+  const { isPro } = useProStatus();
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
 
   const { main } = formatDateTimer(
@@ -96,6 +98,7 @@ export default function SimpleTimer() {
         ]),
         false,
         "countdown",
+        isPro && preferences.voicePromptsEnabled,
       );
     } catch (e) {
       showSnackbar("Failed to start timer, please try again", true);
@@ -379,7 +382,7 @@ const styles = StyleSheet.create({
   },
   presetRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
     maxWidth: 300,
     gap: 10,
   },

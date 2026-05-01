@@ -18,6 +18,8 @@ import ActionButtonsRow from "@/components/ActionButtonsRow";
 import TimerDisplay from "@/components/TimerDisplay";
 import StatusBadge from "@/components/StatusBadge";
 import AppSnackbar from "@/components/AppSnackBar";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useProStatus } from "@/hooks/use-pro-status";
 
 const { IntervalServiceModule } = NativeModules;
 
@@ -32,6 +34,10 @@ export default function StopWatch() {
     message: "",
     isError: false,
   });
+
+  // --- Hooks ---
+  const { preferences } = useUserPreferences();
+  const { isPro } = useProStatus();
 
   const { main, ms } = formatDateTimer(timer, true);
 
@@ -73,6 +79,7 @@ export default function StopWatch() {
         JSON.stringify([{ name: "Stopwatch", durationMs: 999999999 }]),
         false,
         "stopwatch",
+        isPro && preferences.voicePromptsEnabled,
       );
     } catch (e) {
       showSnackbar("Failed to start timer, please try again", true);

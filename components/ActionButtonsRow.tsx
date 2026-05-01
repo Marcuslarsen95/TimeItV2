@@ -12,8 +12,8 @@ interface ActionButtonProps {
   leftButtonLabel: string;
   leftButtonPress: () => void;
   rightButtonIcon?: string;
-  rightButtonLabel: string;
-  rightButtonPress: () => void;
+  rightButtonLabel?: string;
+  rightButtonPress?: () => void;
 }
 
 const BUTTON_RADIUS = 24;
@@ -70,16 +70,18 @@ const ActionButtonsRow = ({
           >
             {leftButtonLabel}
           </Button>
-          <Button
-            mode="contained-tonal"
-            icon={rightButtonIcon}
-            onPress={rightButtonPress}
-            style={[styles.sideButton, { borderRadius: BUTTON_RADIUS }]}
-            contentStyle={styles.sideContent}
-            labelStyle={styles.sideLabel}
-          >
-            {rightButtonLabel}
-          </Button>
+          {rightButtonIcon && (
+            <Button
+              mode="contained-tonal"
+              icon={rightButtonIcon}
+              onPress={rightButtonPress}
+              style={[styles.sideButton, { borderRadius: BUTTON_RADIUS }]}
+              contentStyle={styles.sideContent}
+              labelStyle={styles.sideLabel}
+            >
+              {rightButtonLabel}
+            </Button>
+          )}
         </View>
       )}
     </View>

@@ -19,6 +19,7 @@ export interface Interval {
 export interface UserPreferences {
   hasCompletedSetup: boolean;
   isPro: boolean;
+  voicePromptsEnabled: boolean;
   themeColor: string;
   interval: {
     segments: Interval[];
@@ -37,6 +38,7 @@ const STORAGE_KEY = "userPreferences";
 const defaults: UserPreferences = {
   hasCompletedSetup: false,
   isPro: false,
+  voicePromptsEnabled: false,
   themeColor: "#e9b570",
   interval: {
     segments: [

@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { layout } from "../../styles/layout";
 import { getRandomMs } from "../../utils/HelperFunctions";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
+import { useProStatus } from "@/hooks/use-pro-status";
 import { useWorkoutPresets } from "@/hooks/use-workout-presets";
 
 import ActionButtonsRow from "@/components/ActionButtonsRow";
@@ -47,6 +48,7 @@ export default function RandomScreen() {
 
   // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
+  const { isPro } = useProStatus();
   const { presets, savePreset, deletePreset } = useWorkoutPresets();
 
   const { minSecs, maxSecs } = preferences.random;
@@ -100,6 +102,7 @@ export default function RandomScreen() {
         JSON.stringify([{ name: "Random", durationMs: randomTime }]),
         false,
         "random",
+        isPro && preferences.voicePromptsEnabled,
       );
     } catch (e) {
       showSnackbar("Failed to start timer, please try again", true);
@@ -291,14 +294,22 @@ export default function RandomScreen() {
                 />
               </View>
             ) : (
-              <View style={{ width: "100%", alignItems: "center" }}>
+              <View style={{ width: "100%", alignItems: "center", gap: 30 }}>
                 <TimeWheelPicker
-                  label="Between"
+                  label="Minimum time"
                   valueInSeconds={minSecs}
                   onChange={setMinSecs}
                 />
+                {/* <View
+                  style={{
+                    height: 1.5,
+                    backgroundColor: theme.colors.surfaceVariant,
+                    alignSelf: "stretch", // or width: "100%"
+                    marginBottom: 20,
+                  }}
+                /> */}
                 <TimeWheelPicker
-                  label="And"
+                  label="Maximum time"
                   valueInSeconds={maxSecs}
                   onChange={setMaxSecs}
                 />
@@ -328,9 +339,6 @@ export default function RandomScreen() {
             leftButtonIcon="stop"
             leftButtonLabel="Stop"
             leftButtonPress={stopTimer}
-            rightButtonIcon="play-forward"
-            rightButtonLabel="10s"
-            rightButtonPress={skipForward}
           />
 
           <AppSnackbar

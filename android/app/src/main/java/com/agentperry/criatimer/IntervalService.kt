@@ -16,6 +16,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.IBinder
 import android.util.Log
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import org.json.JSONArray
 
 data class NativeInterval(
@@ -33,6 +35,7 @@ class IntervalService : Service() {
         var remainingBeforePause: Long = 0L
         var instance: IntervalService? = null
         var shouldLoop: Boolean = false
+        var voicePromptsEnabled: Boolean = false
         var isAlarmRinging: Boolean = false
     }
 
@@ -43,11 +46,13 @@ class IntervalService : Service() {
     private var lastNotificationUpdateTime = 0L
     private var beep: MediaPlayer? = null
     private var ping: MediaPlayer? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     override fun onCreate() {
         super.onCreate()
         instance = this
-    
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 "interval_channel",
@@ -60,6 +65,26 @@ class IntervalService : Service() {
 
         beep = MediaPlayer.create(this, R.raw.beep)
         ping = MediaPlayer.create(this, R.raw.countdown_beep_v3)
+
+        tts = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.UK
+                tts?.setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                ttsReady = true
+            } else {
+                Log.w("IntervalService", "TTS init failed: $status")
+            }
+        }
+    }
+
+    private fun speak(text: String) {
+        if (!ttsReady || !voicePromptsEnabled || text.isBlank()) return
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "cria-tts")
     }
 
 
@@ -69,13 +94,11 @@ class IntervalService : Service() {
     // 0. HANDLE TIMER TYPE SWITCH
     // If a startSequence call is coming in for a *different* timer type while
     // another timer is currently running, emit a stop event for the previous
-    // type so its JS screen can reset its local state. Otherwise the previous
-    // screen keeps stale `timer` / `isPaused` values and tapping play later
-    // sends a `toggle` into a service that no longer matches.
+    // type so its JS screen can reset its local state.
     val incomingTimerType = intent.getStringExtra("timerType")
     val isStartIntent = intent.hasExtra("intervals") && intent.getBooleanExtra("start", false)
     if (isStartIntent && isRunning && incomingTimerType != null && incomingTimerType != timerType) {
-        sendStoppedToJS()                       // emits with the *previous* timerType
+        sendStoppedToJS()
         handler.removeCallbacks(tickRunnable)
         isRunning = false
         isPaused = false
@@ -90,6 +113,10 @@ class IntervalService : Service() {
 
     if (intent.hasExtra("repeat")) {
         shouldLoop = intent.getBooleanExtra("repeat", false)
+    }
+
+    if (intent.hasExtra("voicePrompts")) {
+        voicePromptsEnabled = intent.getBooleanExtra("voicePrompts", false)
     }
 
     // 1. HANDLE JSON DATA
@@ -139,7 +166,7 @@ class IntervalService : Service() {
         stopSelf()
         return START_NOT_STICKY
     }
-    
+
     if (intent.getBooleanExtra("toggle", false)) {
         if (isPaused) resumeEngine() else pauseEngine()
     }
@@ -162,7 +189,7 @@ class IntervalService : Service() {
 
     private fun sendAlarmNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            
+
             val channel = NotificationChannel(
                 "alarm_channel",
                 "Alarm",
@@ -185,7 +212,6 @@ class IntervalService : Service() {
         }
 
         // Deep-link the user back into the screen that fired the alarm.
-        // Routes: countdown == "/" (root tab), random == "/random".
         val launchUri = when (timerType) {
             "random" -> android.net.Uri.parse("cria-timer://random")
             else -> android.net.Uri.parse("cria-timer://")
@@ -329,14 +355,13 @@ class IntervalService : Service() {
         remainingBeforePause = 0L
 
         handler.post(tickRunnable)
-        // ... rest of your code
     }
 
     internal fun skipToNext() {
-        if (intervals.isEmpty()) return 
+        if (intervals.isEmpty()) return
 
         // 1. Move to next index
-        currentIndex++ 
+        currentIndex++
         if (currentIndex >= intervals.size) {
             currentIndex = 0
         }
@@ -352,12 +377,16 @@ class IntervalService : Service() {
             intervalStartTime = System.currentTimeMillis()
         }
 
+        lastBeepSecond = -1L
+        lastSpokenSecond = -1L
+
         // 3. Audio Feedback
         beep?.let { if (!it.isPlaying) it.start() }
+        speak(nextInterval.name)
 
         // 4. Update UI Layers
         sendUpdateToJS(nextInterval.name, nextInterval.durationMs)
-        updateNotification(nextInterval.durationMs) 
+        updateNotification(nextInterval.durationMs)
     }
 
     internal fun skipForward(ms: Double) {
@@ -379,11 +408,11 @@ class IntervalService : Service() {
                 val nextInterval = intervals[currentIndex]
                 remainingBeforePause = nextInterval.durationMs
                 sendUpdateToJS(nextInterval.name, remainingBeforePause)
-                updateNotification(remainingBeforePause)  // already here
+                updateNotification(remainingBeforePause)
             } else {
                 remainingBeforePause = newRemaining
                 sendUpdateToJS(intervals[currentIndex].name, remainingBeforePause)
-                updateNotification(remainingBeforePause)  // already here
+                updateNotification(remainingBeforePause)
             }
         } else {
             val remaining = intervals[currentIndex].durationMs - (System.currentTimeMillis() - intervalStartTime)
@@ -405,7 +434,7 @@ class IntervalService : Service() {
                 intervalStartTime = System.currentTimeMillis()
                 val nextInterval = intervals[currentIndex]
                 sendUpdateToJS(nextInterval.name, nextInterval.durationMs)
-                updateNotification(nextInterval.durationMs)  // already here
+                updateNotification(nextInterval.durationMs)
             } else {
                 intervalStartTime -= ms.toLong()
                 val newRemaining = intervals[currentIndex].durationMs - (System.currentTimeMillis() - intervalStartTime)
@@ -426,6 +455,7 @@ class IntervalService : Service() {
         remainingBeforePause = 0L
         currentIndex = 0
         lastBeepSecond = -1L
+        lastSpokenSecond = -1L
         intervalStartTime = System.currentTimeMillis()
         handler.post(tickRunnable)
     }
@@ -459,7 +489,7 @@ class IntervalService : Service() {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
-            putString("timerType", timerType)  
+            putString("timerType", timerType)
         }
         ctx
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
@@ -470,7 +500,7 @@ class IntervalService : Service() {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
-            putString("timerType", timerType)  
+            putString("timerType", timerType)
         }
         ctx
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
@@ -481,7 +511,7 @@ class IntervalService : Service() {
         val ctx = reactContext ?: return
 
         val params = Arguments.createMap().apply {
-            putString("timerType", timerType)  
+            putString("timerType", timerType)
         }
 
         ctx
@@ -492,7 +522,7 @@ class IntervalService : Service() {
     internal fun recordLap() {
         if (timerType != "stopwatch") return
         val elapsed = System.currentTimeMillis() - intervalStartTime
-        
+
         val ctx = reactContext ?: return
         val params = Arguments.createMap().apply {
             putDouble("elapsedMs", elapsed.toDouble())
@@ -503,6 +533,7 @@ class IntervalService : Service() {
 
 
     private var lastBeepSecond = -1L
+    private var lastSpokenSecond = -1L
 
     private val tickRunnable = object : Runnable {
         override fun run() {
@@ -526,11 +557,35 @@ class IntervalService : Service() {
                 return
             }
 
+            // --- Voice prompts at 60s, 30s, 10s, and the 3-2-1 countdown ---
+            // Only update lastSpokenSecond when speak actually has a chance
+            // to fire (TTS ready + prompts enabled), otherwise an early
+            // 60s mark would be silently consumed before TTS init completes.
+            val spokenText: String? = when (currentSecond) {
+                60L -> "sixty seconds remaining!"
+                30L -> "thirty seconds remaining!"
+                10L -> "ten seconds remaining!"
+                3L  -> "three"
+                2L  -> "two"
+                1L  -> "one"
+                else -> null
+            }
+
+            if (spokenText != null
+                && currentSecond != lastSpokenSecond
+                && ttsReady
+                && voicePromptsEnabled
+                && timerType != "random"
+            ) {
+                speak(spokenText)
+                lastSpokenSecond = currentSecond
+            }
+
             if (currentSecond in 1..3 && currentSecond != lastBeepSecond) {
-                if (timerType == "interval"){
-                    ping?.let { if  (!it.isPlaying) it.start()}
+                if (timerType == "interval") {
+                    ping?.let { if (!it.isPlaying) it.start() }
                 }
-                
+
                 lastBeepSecond = currentSecond
             }
 
@@ -546,8 +601,9 @@ class IntervalService : Service() {
                 if (timerType == "interval") {
                     beep?.let { if (!it.isPlaying) it.start() }
                 }
-                lastBeepSecond = -1L 
-                
+                lastBeepSecond = -1L
+                lastSpokenSecond = -1L
+
                 if (!shouldLoop && currentIndex == intervals.size - 1) {
                     isRunning = false
                     handler.removeCallbacksAndMessages(null)
@@ -562,10 +618,11 @@ class IntervalService : Service() {
                     return
                 }
 
-                
+
 
                 currentIndex = (currentIndex + 1) % intervals.size
-                intervalStartTime = System.currentTimeMillis() 
+                intervalStartTime = System.currentTimeMillis()
+                speak(intervals[currentIndex].name)
                 updateNotification(intervals[currentIndex].durationMs)
             }
 
@@ -606,92 +663,92 @@ class IntervalService : Service() {
     }
 
 
-private fun buildNotification(isPaused: Boolean, remainingMs: Long): Notification {
-    val channelId = "interval_channel"
+    private fun buildNotification(isPaused: Boolean, remainingMs: Long): Notification {
+        val channelId = "interval_channel"
 
-   val pausePending = buildActionPendingIntent(0, "ACTION_PAUSE")
-    val resumePending = buildActionPendingIntent(1, "ACTION_RESUME")
-    val stopPending = buildActionPendingIntent(2, "ACTION_STOP")
-    val skipPending = if (timerType == "interval") {
-        buildActionPendingIntent(3, "ACTION_SKIP")
-    } else {
-        buildActionPendingIntent(4, "ACTION_SKIP_FORWARD")
+        val pausePending = buildActionPendingIntent(0, "ACTION_PAUSE")
+        val resumePending = buildActionPendingIntent(1, "ACTION_RESUME")
+        val stopPending = buildActionPendingIntent(2, "ACTION_STOP")
+        val skipPending = if (timerType == "interval") {
+            buildActionPendingIntent(3, "ACTION_SKIP")
+        } else {
+            buildActionPendingIntent(4, "ACTION_SKIP_FORWARD")
+        }
+        val lapPending = buildActionPendingIntent(5, "ACTION_LAP")
+        val contentPendingIntent = PendingIntent.getActivity(
+            this, 0,
+            packageManager.getLaunchIntentForPackage(packageName),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val intervalName = when (timerType) {
+            "random" -> "Random"
+            "stopwatch" -> "Stopwatch"
+            else -> if (intervals.isNotEmpty()) intervals[currentIndex].name else "Timer"
+        }
+
+        val thirdButtonIcon = when (timerType) {
+            "random" -> R.drawable.fast_forward_vector
+            "stopwatch" -> R.drawable.laps_vector
+            "interval" -> R.drawable.skip_next_vector
+            "countdown" -> R.drawable.fast_forward_vector
+            else -> R.drawable.skip_next_vector
+        }
+
+        val thirdButtonLabel = when (timerType) {
+            "stopwatch" -> "Lap"
+            else -> "Skip"
+        }
+
+        val builder = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.drawable.notification_icon_cria)
+            .setContentIntent(contentPendingIntent)
+            .setColor(android.graphics.Color.parseColor("#16191d"))
+            .setColorized(true)
+            .setOngoing(true)
+            .setShowWhen(false)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+
+        if (isPaused) {
+            builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
+            builder.setContentText("$intervalName • Paused")
+            builder.addAction(R.drawable.play_vector, "Resume", resumePending)   // Action 0
+        } else {
+            builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
+            builder.setContentText("$intervalName • Running")
+            builder.addAction(R.drawable.pause_vector, "Pause", pausePending)    // Action 0
+        }
+
+        builder.addAction(R.drawable.stop_vector, "Stop", stopPending)           // Action 1
+        builder.addAction(
+            thirdButtonIcon,
+            thirdButtonLabel,
+            if (timerType == "stopwatch") lapPending else skipPending,
+        )
+
+        val style = androidx.media.app.NotificationCompat.MediaStyle()
+            .setShowActionsInCompactView(0, 2) // Play/Pause + Skip/Lap, hide Stop
+
+        builder.setStyle(style)
+
+        return builder.build()
     }
-    val lapPending = buildActionPendingIntent(5, "ACTION_LAP")
-    val contentPendingIntent = PendingIntent.getActivity(
-        this, 0,
-        packageManager.getLaunchIntentForPackage(packageName),
-        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-    )
 
-    val intervalName = when (timerType) {
-        "random" -> "Random"
-        "stopwatch" -> "Stopwatch"
-        else -> if (intervals.isNotEmpty()) intervals[currentIndex].name else "Timer"
+
+    private fun updateNotification(remainingMs: Long) {
+        val notification = buildNotification(isPaused, remainingMs)
+        startForeground(1, notification)
     }
 
-    val thirdButtonIcon = when (timerType) {
-        "random" -> R.drawable.fast_forward_vector
-        "stopwatch" -> R.drawable.laps_vector
-        "interval" -> R.drawable.skip_next_vector
-        "countdown" -> R.drawable.fast_forward_vector
-        else -> R.drawable.skip_next_vector
+
+
+    private fun formatTime(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format("%02d:%02d", minutes, seconds)
     }
-
-    val thirdButtonLabel = when (timerType) {
-        "stopwatch" -> "Lap"
-        else -> "Skip"
-    }
-
-    val builder = NotificationCompat.Builder(this, channelId)
-        .setSmallIcon(R.drawable.notification_icon_cria)
-        .setContentIntent(contentPendingIntent)
-        .setColor(android.graphics.Color.parseColor("#16191d"))
-        .setColorized(true)
-        .setOngoing(true)
-        .setShowWhen(false)
-        .setOnlyAlertOnce(true)
-        .setCategory(NotificationCompat.CATEGORY_SERVICE)
-
-    if (isPaused) {
-        builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
-        builder.setContentText("$intervalName • Paused")
-        builder.addAction(R.drawable.play_vector, "Resume", resumePending)   // Action 0
-    } else {
-        builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
-        builder.setContentText("$intervalName • Running")
-        builder.addAction(R.drawable.pause_vector, "Pause", pausePending)    // Action 0
-    }
-
-    builder.addAction(R.drawable.stop_vector, "Stop", stopPending)           // Action 1
-    builder.addAction(
-        thirdButtonIcon,
-        thirdButtonLabel,
-        if (timerType == "stopwatch") lapPending else skipPending,
-    )
-
-    val style = androidx.media.app.NotificationCompat.MediaStyle()
-        .setShowActionsInCompactView(0, 2) // Play/Pause + Skip/Lap, hide Stop
-
-    builder.setStyle(style)
-
-    return builder.build()
-}
-
-
-private fun updateNotification(remainingMs: Long) {
-    val notification = buildNotification(isPaused, remainingMs)
-    startForeground(1, notification)
-}
-
-
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format("%02d:%02d", minutes, seconds)
-}
 
     override fun onDestroy() {
         instance = null
@@ -699,6 +756,9 @@ private fun formatTime(ms: Long): String {
         beep?.release()
         ping?.release()
         alarmPlayer?.release()
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
         super.onDestroy()
     }
 

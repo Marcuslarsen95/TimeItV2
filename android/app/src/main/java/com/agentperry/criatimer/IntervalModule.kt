@@ -24,13 +24,14 @@ class IntervalModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun startSequence(intervalsJson: String, withRepeat: Boolean, timerType: String) {
+    fun startSequence(intervalsJson: String, withRepeat: Boolean, timerType: String, voicePrompts: Boolean,) {
         val context = reactApplicationContext
         val intent = Intent(context, IntervalService::class.java)
         intent.putExtra("start", true)
         intent.putExtra("intervals", intervalsJson)
         intent.putExtra("repeat", withRepeat)
         intent.putExtra("timerType", timerType)
+        intent.putExtra("voicePrompts", voicePrompts)
         context.startForegroundService(intent)
     }
 

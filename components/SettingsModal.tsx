@@ -5,6 +5,7 @@ import {
   IconButton,
   Modal,
   Portal,
+  Switch,
   Text,
   useTheme,
 } from "react-native-paper";
@@ -29,6 +30,11 @@ const SettingsModal = ({ visible, onDismiss }: Props) => {
   const handleColorSelect = (color: string) => {
     if (!isPro) return;
     updatePreference("themeColor", color);
+  };
+
+  const handleVoicePromptsToggle = (enabled: boolean) => {
+    if (!isPro) return;
+    updatePreference("voicePromptsEnabled", enabled);
   };
 
   return (
@@ -171,6 +177,62 @@ const SettingsModal = ({ visible, onDismiss }: Props) => {
             disabled={!isPro}
           />
         </View>
+
+        {/* Voice prompts toggle */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text
+              variant="titleSmall"
+              style={{
+                color: theme.colors.onSecondaryContainer,
+                fontWeight: "600",
+              }}
+            >
+              Voice prompts
+            </Text>
+            {!isPro && (
+              <View
+                style={[
+                  styles.lockTag,
+                  { backgroundColor: theme.colors.surface },
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed"
+                  size={11}
+                  color={theme.colors.onSurface}
+                />
+                <Text
+                  variant="labelSmall"
+                  style={{
+                    color: theme.colors.onSurface,
+                    fontWeight: "700",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  PRO
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.toggleRow}>
+            <Text
+              variant="bodyMedium"
+              style={{
+                color: theme.colors.onSecondaryContainer,
+                flex: 1,
+                opacity: isPro ? 1 : 0.5,
+              }}
+            >
+              Announce 3-2-1 countdown and interval names
+            </Text>
+            <Switch
+              value={isPro && (preferences.voicePromptsEnabled ?? false)}
+              onValueChange={handleVoicePromptsToggle}
+              disabled={!isPro}
+            />
+          </View>
+        </View>
       </Modal>
     </Portal>
   );
@@ -222,6 +284,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
 });
 

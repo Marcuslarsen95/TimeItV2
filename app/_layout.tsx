@@ -124,18 +124,6 @@ function RootLayoutInner() {
         theme={theme}
         settings={{ icon: (props) => <Ionicons {...props} /> }}
       >
-        {/* <LinearGradient
-          colors={[
-            theme.colors.background,
-            colorScheme === "dark"
-              ? theme.colors.primary + "22"
-              : theme.colors.primary + "CC",
-          ]}
-          start={{ x: 0, y: 1 }}
-          end={{ x: 1, y: 0 }}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-          dither={false}
-        /> */}
         <View
           style={{
             position: "absolute",
