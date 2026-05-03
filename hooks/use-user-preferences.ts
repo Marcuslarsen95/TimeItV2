@@ -23,6 +23,7 @@ export interface UserPreferences {
   themeColor: string;
   interval: {
     segments: Interval[];
+    repeatCount: number;
   };
   countdown: {
     duration: number;
@@ -46,6 +47,7 @@ const defaults: UserPreferences = {
       { id: 2, durationSecs: 10, name: "Recovery", unit: "Seconds" },
       { id: 3, durationSecs: 0, name: "Transition", unit: "Seconds" },
     ],
+    repeatCount: 1,
   },
   countdown: { duration: 25 },
   random: { minSecs: 60, maxSecs: 300 },
@@ -76,7 +78,16 @@ export function UserPreferencesProvider({
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored) as Partial<UserPreferences>;
-          setPreferences({ ...defaults, ...parsed });
+          setPreferences({
+            ...defaults,
+            ...parsed,
+            // Deep-merge "interval" so newly-added fields (like repeatCount)
+            // fall back to the default for users with older stored prefs.
+            interval: {
+              ...defaults.interval,
+              ...(parsed.interval ?? {}),
+            },
+          });
         }
       } catch (e) {
         console.warn("Failed to load preferences", e);

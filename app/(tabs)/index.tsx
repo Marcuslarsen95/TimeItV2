@@ -5,6 +5,7 @@ import {
   NativeModules,
   DeviceEventEmitter,
 } from "react-native";
+import { OPEN_SETTINGS_EVENT } from "@/components/SettingsTrigger";
 import {
   useTheme,
   Button,
@@ -41,7 +42,13 @@ export default function SimpleTimer() {
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [isAlarmActive, setIsAlarmActive] = useState(false);
-  const [snackbar, setSnackbar] = useState({
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    isError: boolean;
+    action?: { label: string; onPress: () => void };
+    secondaryAction?: { label: string; onPress: () => void };
+  }>({
     visible: false,
     message: "",
     isError: false,
@@ -50,7 +57,8 @@ export default function SimpleTimer() {
   // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
   const { isPro } = useProStatus();
-  const { presets, savePreset, deletePreset } = useWorkoutPresets();
+  const { presets, savePreset, canSavePreset, deletePreset } =
+    useWorkoutPresets();
 
   const { main } = formatDateTimer(
     timer > 0 ? timer : inputTimeSecs * 1000,
@@ -81,8 +89,13 @@ export default function SimpleTimer() {
   const currentStatus = getStatus();
 
   // --- Snackbar ---
-  const showSnackbar = (message: string, isError = false) =>
-    setSnackbar({ visible: true, message, isError });
+  const showSnackbar = (
+    message: string,
+    isError = false,
+    action?: { label: string; onPress: () => void },
+    secondaryAction?: { label: string; onPress: () => void },
+  ) =>
+    setSnackbar({ visible: true, message, isError, action, secondaryAction });
 
   // --- Timer controls ---
   const startTimer = () => {
@@ -99,6 +112,7 @@ export default function SimpleTimer() {
         false,
         "countdown",
         isPro && preferences.voicePromptsEnabled,
+        1,
       );
     } catch (e) {
       showSnackbar("Failed to start timer, please try again", true);
@@ -139,8 +153,36 @@ export default function SimpleTimer() {
   };
 
   // --- Presets ---
+  const handleSavePresetClick = () => {
+    if (!canSavePreset("countdown", isPro)) {
+      showSnackbar(
+        "Free plan: 3 presets per timer. Upgrade for unlimited.",
+        false,
+        {
+          label: "Upgrade",
+          onPress: () => DeviceEventEmitter.emit(OPEN_SETTINGS_EVENT),
+        },
+        {
+          label: "Manage",
+          onPress: () => setIsPresetsOpen(true),
+        },
+      );
+      return;
+    }
+    setShowSaveDialog(true);
+  };
+
   const handleSavePreset = async (name: string) => {
-    await savePreset(name, "countdown", { duration: inputTimeSecs });
+    const result = await savePreset(
+      name,
+      "countdown",
+      { duration: inputTimeSecs },
+      isPro,
+    );
+    if (!result.ok) {
+      showSnackbar("Couldn't save preset — Pro limit reached.", true);
+      return;
+    }
     showSnackbar("Preset saved!");
   };
 
@@ -250,11 +292,12 @@ export default function SimpleTimer() {
               visible={snackbar.visible}
               message={snackbar.message}
               onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-              color={
-                snackbar.isError ? theme.colors.error : theme.colors.primary
-              }
-              textColor={
-                snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+              color={snackbar.isError ? theme.colors.error : undefined}
+              textColor={snackbar.isError ? theme.colors.onError : undefined}
+              action={snackbar.action}
+              secondaryAction={snackbar.secondaryAction}
+              duration={
+                snackbar.action || snackbar.secondaryAction ? 5000 : 2000
               }
             />
           </View>
@@ -290,10 +333,7 @@ export default function SimpleTimer() {
 
           {timer === 0 && (
             <View style={styles.presetRow}>
-              <Button
-                icon="save-outline"
-                onPress={() => setShowSaveDialog(true)}
-              >
+              <Button icon="save-outline" onPress={handleSavePresetClick}>
                 Save for later
               </Button>
               <Button icon="bookmarks-outline" onPress={openPresets}>
@@ -319,9 +359,12 @@ export default function SimpleTimer() {
             visible={snackbar.visible}
             message={snackbar.message}
             onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
-            textColor={
-              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+            color={snackbar.isError ? theme.colors.error : undefined}
+            textColor={snackbar.isError ? theme.colors.onError : undefined}
+            action={snackbar.action}
+            secondaryAction={snackbar.secondaryAction}
+            duration={
+              snackbar.action || snackbar.secondaryAction ? 5000 : 2000
             }
           />
         </View>

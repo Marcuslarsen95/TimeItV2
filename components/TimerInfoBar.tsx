@@ -1,6 +1,8 @@
 import React from "react";
 import { View } from "react-native";
 import { Text, useTheme } from "react-native-paper";
+import InfoPill from "@/components/InfoPill";
+import Ionicons from "@expo/vector-icons/Ionicons";
 
 interface IntervalSegment {
   id: number;
@@ -18,6 +20,7 @@ interface IntervalProps {
   segments: IntervalSegment[];
   currentInterval?: string;
   isRunning?: boolean;
+  repeatCount?: number;
 }
 
 interface RandomProps {
@@ -105,46 +108,64 @@ export default function TimerInfoBar(props: Props) {
     <View
       style={{
         flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "center",
         marginTop: 12,
+        gap: 20,
       }}
     >
-      {props.segments.map((i, index) => {
-        const isActive = i.durationSecs > 0;
-        const isCurrentlyRunning =
-          props.currentInterval?.toLowerCase() === i.name.toLowerCase() &&
-          props.isRunning;
-        return (
-          <React.Fragment key={i.id}>
-            <Text
-              variant="labelSmall"
-              style={{
-                minWidth: 50,
-                fontSize: 10,
-                textAlign: "center",
-                color: isCurrentlyRunning
-                  ? theme.colors.primary
-                  : isActive
-                    ? theme.colors.onSurface
-                    : theme.colors.onSurfaceDisabled,
-                fontWeight: isCurrentlyRunning ? "700" : "400",
-                opacity: isActive ? 1 : 0.3,
-              }}
-            >
-              {i.name} {isActive ? formatShort(i.durationSecs) : "OFF"}
-            </Text>
-            {index < props.segments.length - 1 && (
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        {props.segments.map((i, index) => {
+          const isActive = i.durationSecs > 0;
+          const isCurrentlyRunning =
+            props.currentInterval?.toLowerCase() === i.name.toLowerCase() &&
+            props.isRunning;
+          return (
+            <React.Fragment key={i.id}>
               <Text
                 variant="labelSmall"
-                style={{ color: theme.colors.outline, marginHorizontal: 6 }}
+                style={{
+                  minWidth: 50,
+                  fontSize: 12,
+                  textAlign: "center",
+                  color: isCurrentlyRunning
+                    ? theme.colors.primary
+                    : isActive
+                      ? theme.colors.onSurface
+                      : theme.colors.onSurfaceDisabled,
+                  fontWeight: isCurrentlyRunning ? "700" : "400",
+                  opacity: isActive ? 1 : 0.7,
+                }}
               >
-                |
+                {i.name} {isActive ? formatShort(i.durationSecs) : "OFF"}
               </Text>
-            )}
-          </React.Fragment>
-        );
-      })}
+              {index < props.segments.length - 1 && (
+                <Text
+                  variant="labelSmall"
+                  style={{ color: theme.colors.outline, marginHorizontal: 6 }}
+                >
+                  |
+                </Text>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </View>
+
+      <InfoPill
+        icon={
+          <Ionicons
+            name="repeat"
+            size={14}
+            color={theme.colors.onSurfaceVariant}
+          />
+        }
+        label={`${props.repeatCount}`}
+      />
     </View>
   );
 }

@@ -58,8 +58,10 @@ export default {
         {
           appearance: "light",
           behavior: "inset-swipe",
-          visibility: "hidden",
-          isTranslucent: true,
+          // Keep the nav bar always visible so layout insets are stable
+          // and content doesn't reflow when the bar shows/hides.
+          visibility: "visible",
+          isTranslucent: false,
         },
       ],
       "expo-font",

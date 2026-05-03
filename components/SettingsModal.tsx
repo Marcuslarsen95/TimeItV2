@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Linking } from "react-native";
 import {
   Button,
   IconButton,
@@ -35,6 +35,19 @@ const SettingsModal = ({ visible, onDismiss }: Props) => {
   const handleVoicePromptsToggle = (enabled: boolean) => {
     if (!isPro) return;
     updatePreference("voicePromptsEnabled", enabled);
+  };
+
+  const openTtsSettings = () => {
+    // System Text-to-Speech settings — lets the user pick voice, speed,
+    // pitch, install language data, etc. Android-only intent.
+    //
+    // Note: TTS Settings lives under "com.android.settings.*", NOT the
+    // public "android.settings.*" namespace that most settings actions use.
+    // Matches Android's Settings.ACTION_TEXT_TO_SPEECH_SETTINGS constant.
+    Linking.sendIntent("com.android.settings.TTS_SETTINGS").catch(() => {
+      // Some manufacturers / API levels don't expose this intent;
+      // fail silently rather than showing an error.
+    });
   };
 
   return (
@@ -232,6 +245,17 @@ const SettingsModal = ({ visible, onDismiss }: Props) => {
               disabled={!isPro}
             />
           </View>
+          <Button
+            icon="cog-outline"
+            mode="outlined"
+            compact
+            onPress={openTtsSettings}
+            disabled={!isPro}
+            style={{ alignSelf: "flex-start" }}
+            labelStyle={{ fontSize: 12 }}
+          >
+            Voice & speed settings
+          </Button>
         </View>
       </Modal>
     </Portal>

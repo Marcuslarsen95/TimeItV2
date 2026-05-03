@@ -17,6 +17,9 @@ import android.os.Looper
 import android.os.IBinder
 import android.util.Log
 import android.speech.tts.TextToSpeech
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import java.util.Locale
 import org.json.JSONArray
 
@@ -37,6 +40,8 @@ class IntervalService : Service() {
         var shouldLoop: Boolean = false
         var voicePromptsEnabled: Boolean = false
         var isAlarmRinging: Boolean = false
+        var totalPasses: Int = 1
+        var completedPasses: Int = 0
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -48,6 +53,7 @@ class IntervalService : Service() {
     private var ping: MediaPlayer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    private var mediaSession: MediaSessionCompat? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -80,6 +86,74 @@ class IntervalService : Service() {
                 Log.w("IntervalService", "TTS init failed: $status")
             }
         }
+
+        // MediaSession — exposes a "media playback" surface so paired smart
+        // watches, headphones, and lock-screen controls can drive the timer
+        // through the standard play/pause/skip media key events.
+        //
+        // We only expose play/pause/stop universally; skip-next is offered
+        // only for the interval timer (where it makes sense as "next segment").
+        // No skip-previous — there's no clean meaning for it.
+        mediaSession = MediaSessionCompat(this, "CriaTimerSession").apply {
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay()  { resumeEngine() }
+                override fun onPause() { pauseEngine() }
+                override fun onStop() {
+                    resetEngine()
+                    sendStoppedToJS()
+                    stopSelf()
+                }
+                override fun onSkipToNext() {
+                    // Only meaningful for the interval timer. Other timer types
+                    // don't advertise this action, so we shouldn't be called for
+                    // them — but no-op defensively just in case.
+                    if (timerType == "interval") skipToNext()
+                }
+            })
+            isActive = true
+        }
+    }
+
+    private fun updateMediaSession(remainingMs: Long) {
+        val session = mediaSession ?: return
+
+        val state = if (isPaused)
+            PlaybackStateCompat.STATE_PAUSED
+        else
+            PlaybackStateCompat.STATE_PLAYING
+
+        // Only expose actions we actually want surfaced on watches / lock-screen.
+        // Skip-next only makes sense for the interval timer — random / countdown /
+        // stopwatch don't have a meaningful "next" so we omit it.
+        var actions = PlaybackStateCompat.ACTION_PLAY or
+            PlaybackStateCompat.ACTION_PAUSE or
+            PlaybackStateCompat.ACTION_PLAY_PAUSE or
+            PlaybackStateCompat.ACTION_STOP
+
+        if (timerType == "interval") {
+            actions = actions or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
+        }
+
+        session.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(actions)
+                .setState(state, remainingMs, 1.0f)
+                .build()
+        )
+
+        val current = intervals.getOrNull(currentIndex)
+        val title = when (timerType) {
+            "random"    -> "Random timer"
+            "stopwatch" -> "Stopwatch"
+            else        -> current?.name ?: "Timer"
+        }
+        session.setMetadata(
+            MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, "Cria Timer")
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, current?.durationMs ?: 0L)
+                .build()
+        )
     }
 
     private fun speak(text: String) {
@@ -117,6 +191,10 @@ class IntervalService : Service() {
 
     if (intent.hasExtra("voicePrompts")) {
         voicePromptsEnabled = intent.getBooleanExtra("voicePrompts", false)
+    }
+
+    if (intent.hasExtra("repeatCount")) {
+        totalPasses = intent.getIntExtra("repeatCount", 1).coerceAtLeast(1)
     }
 
     // 1. HANDLE JSON DATA
@@ -360,15 +438,27 @@ class IntervalService : Service() {
     internal fun skipToNext() {
         if (intervals.isEmpty()) return
 
-        // 1. Move to next index
-        currentIndex++
-        if (currentIndex >= intervals.size) {
-            currentIndex = 0
+        // 1. Pass / loop bookkeeping. If we're skipping the last interval of
+        //    the final pass, finish the sequence instead of wrapping around.
+        val isLastInterval = currentIndex == intervals.size - 1
+        if (isLastInterval) {
+            if (!shouldLoop) {
+                finishSequence()
+                return
+            }
+            completedPasses++
+            if (completedPasses >= totalPasses) {
+                finishSequence()
+                return
+            }
         }
+
+        // 2. Move to next index (wrap)
+        currentIndex = (currentIndex + 1) % intervals.size
 
         val nextInterval = intervals[currentIndex]
 
-        // 2. Fix the Pause Logic
+        // 3. Fix the Pause Logic
         if (isPaused) {
             remainingBeforePause = nextInterval.durationMs
             sendPausedToJS()
@@ -380,11 +470,11 @@ class IntervalService : Service() {
         lastBeepSecond = -1L
         lastSpokenSecond = -1L
 
-        // 3. Audio Feedback
+        // 4. Audio Feedback
         beep?.let { if (!it.isPlaying) it.start() }
         speak(nextInterval.name)
 
-        // 4. Update UI Layers
+        // 5. Update UI Layers
         sendUpdateToJS(nextInterval.name, nextInterval.durationMs)
         updateNotification(nextInterval.durationMs)
     }
@@ -454,6 +544,7 @@ class IntervalService : Service() {
         isPaused = false
         remainingBeforePause = 0L
         currentIndex = 0
+        completedPasses = 0
         lastBeepSecond = -1L
         lastSpokenSecond = -1L
         intervalStartTime = System.currentTimeMillis()
@@ -465,9 +556,27 @@ class IntervalService : Service() {
         handler.removeCallbacksAndMessages(null)
         isPaused = false
         currentIndex = 0
+        completedPasses = 0
         intervalStartTime = 0L
         remainingBeforePause = 0L
         intervals = emptyList()
+    }
+
+    /**
+     * Wraps up a sequence — used by both the natural-end branch in tickRunnable
+     * and by skipToNext when the user skips past the final pass.
+     */
+    private fun finishSequence() {
+        isRunning = false
+        handler.removeCallbacksAndMessages(null)
+        sendStoppedToJS()
+        if (timerType == "countdown" || timerType == "random") {
+            stopForeground(true)
+            sendAlarmNotification()
+            playAlarmSound()
+        } else {
+            handler.postDelayed({ stopSelf() }, 1000)
+        }
     }
 
 
@@ -478,6 +587,8 @@ class IntervalService : Service() {
             putString("intervalName", intervalName)
             putDouble("remainingMs", remainingMs.toDouble())
             putString("timerType", timerType)
+            putInt("totalPasses", totalPasses)
+            putInt("currentPass", completedPasses + 1)
         }
 
         ctx
@@ -571,7 +682,15 @@ class IntervalService : Service() {
                 else -> null
             }
 
+            // Grace period after each interval starts — suppresses any
+            // checkpoint that lands within ~1.5s of the start so we don't
+            // talk over the just-announced interval name and don't say
+            // "sixty seconds remaining" on a 60-second timer.
+            val graceMs = 1500L
+            val withinStartGrace = elapsed < graceMs
+
             if (spokenText != null
+                && !withinStartGrace
                 && currentSecond != lastSpokenSecond
                 && ttsReady
                 && voicePromptsEnabled
@@ -604,25 +723,22 @@ class IntervalService : Service() {
                 lastBeepSecond = -1L
                 lastSpokenSecond = -1L
 
-                if (!shouldLoop && currentIndex == intervals.size - 1) {
-                    isRunning = false
-                    handler.removeCallbacksAndMessages(null)
-                    sendStoppedToJS()
-                    if (timerType == "countdown" || timerType == "random") {
-                        stopForeground(true)
-                        sendAlarmNotification()
-                        playAlarmSound()
-                    } else {
-                        handler.postDelayed({ stopSelf() }, 1000)
+                val isLastInterval = currentIndex == intervals.size - 1
+                if (isLastInterval) {
+                    if (!shouldLoop) {
+                        finishSequence()
+                        return
                     }
-                    return
+                    completedPasses++
+                    if (completedPasses >= totalPasses) {
+                        finishSequence()
+                        return
+                    }
                 }
-
-
 
                 currentIndex = (currentIndex + 1) % intervals.size
                 intervalStartTime = System.currentTimeMillis()
-                speak(intervals[currentIndex].name)
+                speak(intervals[currentIndex].name + " time")
                 updateNotification(intervals[currentIndex].durationMs)
             }
 
@@ -708,7 +824,18 @@ class IntervalService : Service() {
             .setOngoing(true)
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            // CATEGORY_STOPWATCH is the strongest hint to the OS that this is a
+            // running timer — Samsung's Now Bar and Android's ongoing-activity
+            // row use it to decide whether to promote the notification into a
+            // status-bar pill. Random keeps the generic CATEGORY_SERVICE since
+            // showing a "stopwatch" pill for a hidden-duration timer would
+            // give the game away.
+            .setCategory(
+                if (timerType == "random")
+                    NotificationCompat.CATEGORY_SERVICE
+                else
+                    NotificationCompat.CATEGORY_STOPWATCH
+            )
 
         if (isPaused) {
             builder.setContentTitle(if (timerType == "random") "Random timer" else formatTime(remainingMs))
@@ -727,6 +854,16 @@ class IntervalService : Service() {
             if (timerType == "stopwatch") lapPending else skipPending,
         )
 
+        // MediaStyle here gives us the compact-view button layout: 2 buttons
+        // (actions 0 and 2 — Play/Pause + Skip/Lap) in the collapsed view,
+        // all 3 in the expanded view, all with our own icons.
+        //
+        // We deliberately do NOT call .setMediaSession(token) — that link is
+        // what promotes the notification into Android 13+'s dedicated Media
+        // Player card in Quick Settings, which is the "media-y" look we don't
+        // want for a timer. The MediaSession (created in onCreate) is still
+        // active independently and still drives paired watches, lock-screen,
+        // and Bluetooth headphone controls.
         val style = androidx.media.app.NotificationCompat.MediaStyle()
             .setShowActionsInCompactView(0, 2) // Play/Pause + Skip/Lap, hide Stop
 
@@ -737,6 +874,7 @@ class IntervalService : Service() {
 
 
     private fun updateNotification(remainingMs: Long) {
+        updateMediaSession(remainingMs)
         val notification = buildNotification(isPaused, remainingMs)
         startForeground(1, notification)
     }
@@ -745,9 +883,14 @@ class IntervalService : Service() {
 
     private fun formatTime(ms: Long): String {
         val totalSeconds = ms / 1000
-        val minutes = totalSeconds / 60
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
-        return String.format("%02d:%02d", minutes, seconds)
+        return if (hours > 0) {
+            String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%02d:%02d", minutes, seconds)
+        }
     }
 
     override fun onDestroy() {
@@ -759,6 +902,9 @@ class IntervalService : Service() {
         tts?.stop()
         tts?.shutdown()
         tts = null
+        mediaSession?.isActive = false
+        mediaSession?.release()
+        mediaSession = null
         super.onDestroy()
     }
 

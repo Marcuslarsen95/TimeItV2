@@ -5,6 +5,7 @@ import {
   NativeModules,
   DeviceEventEmitter,
 } from "react-native";
+import { OPEN_SETTINGS_EVENT } from "@/components/SettingsTrigger";
 import {
   useTheme,
   IconButton,
@@ -40,7 +41,13 @@ export default function RandomScreen() {
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [isAlarmActive, setIsAlarmActive] = useState(false);
-  const [snackbar, setSnackbar] = useState({
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    isError: boolean;
+    action?: { label: string; onPress: () => void };
+    secondaryAction?: { label: string; onPress: () => void };
+  }>({
     visible: false,
     message: "",
     isError: false,
@@ -49,7 +56,8 @@ export default function RandomScreen() {
   // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
   const { isPro } = useProStatus();
-  const { presets, savePreset, deletePreset } = useWorkoutPresets();
+  const { presets, savePreset, canSavePreset, deletePreset } =
+    useWorkoutPresets();
 
   const { minSecs, maxSecs } = preferences.random;
   const randomPresets = presets.filter((p) => p.type === "random");
@@ -84,8 +92,13 @@ export default function RandomScreen() {
     updatePreference("random", { ...preferences.random, maxSecs: value });
 
   // --- Snackbar ---
-  const showSnackbar = (message: string, isError = false) =>
-    setSnackbar({ visible: true, message, isError });
+  const showSnackbar = (
+    message: string,
+    isError = false,
+    action?: { label: string; onPress: () => void },
+    secondaryAction?: { label: string; onPress: () => void },
+  ) =>
+    setSnackbar({ visible: true, message, isError, action, secondaryAction });
 
   // --- Timer controls ---
   const startTimer = () => {
@@ -103,6 +116,7 @@ export default function RandomScreen() {
         false,
         "random",
         isPro && preferences.voicePromptsEnabled,
+        1,
       );
     } catch (e) {
       showSnackbar("Failed to start timer, please try again", true);
@@ -143,9 +157,37 @@ export default function RandomScreen() {
   };
 
   // --- Presets ---
+  const handleSavePresetClick = () => {
+    if (!canSavePreset("random", isPro)) {
+      showSnackbar(
+        "Free plan: 3 presets per timer. Upgrade for unlimited.",
+        false,
+        {
+          label: "Upgrade",
+          onPress: () => DeviceEventEmitter.emit(OPEN_SETTINGS_EVENT),
+        },
+        {
+          label: "Manage",
+          onPress: () => setIsPresetsOpen(true),
+        },
+      );
+      return;
+    }
+    setShowSaveDialog(true);
+  };
+
   const handleSavePreset = async (name: string) => {
-    await savePreset(name, "random", { minSecs, maxSecs });
+    const result = await savePreset(
+      name,
+      "random",
+      { minSecs, maxSecs },
+      isPro,
+    );
     setIsPresetsOpen(false);
+    if (!result.ok) {
+      showSnackbar("Couldn't save preset — Pro limit reached.", true);
+      return;
+    }
     showSnackbar("Preset saved!");
   };
 
@@ -255,11 +297,14 @@ export default function RandomScreen() {
               visible={snackbar.visible}
               message={snackbar.message}
               onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-              color={
-                snackbar.isError ? theme.colors.error : theme.colors.primary
-              }
+              color={snackbar.isError ? theme.colors.error : undefined}
               textColor={
-                snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+                snackbar.isError ? theme.colors.onError : undefined
+              }
+              action={snackbar.action}
+              secondaryAction={snackbar.secondaryAction}
+              duration={
+                snackbar.action || snackbar.secondaryAction ? 5000 : 2000
               }
             />
           </View>
@@ -321,7 +366,7 @@ export default function RandomScreen() {
             <View style={styles.presetRow}>
               <Button
                 icon="save-outline"
-                onPress={() => setShowSaveDialog(true)}
+                onPress={handleSavePresetClick}
               >
                 Save for later
               </Button>
@@ -345,9 +390,14 @@ export default function RandomScreen() {
             visible={snackbar.visible}
             message={snackbar.message}
             onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
+            color={snackbar.isError ? theme.colors.error : undefined}
             textColor={
-              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
+              snackbar.isError ? theme.colors.onError : undefined
+            }
+            action={snackbar.action}
+            secondaryAction={snackbar.secondaryAction}
+            duration={
+              snackbar.action || snackbar.secondaryAction ? 5000 : 2000
             }
           />
         </View>

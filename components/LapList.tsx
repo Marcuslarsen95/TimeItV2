@@ -3,14 +3,25 @@ import { View, ScrollView } from "react-native";
 import { Text, useTheme, Button } from "react-native-paper";
 import { formatDateTimer } from "../utils/HelperFunctions";
 import LapRow from "@/components/LapRow";
+import LapListHeader from "./LapListHeader";
 
 interface LapListProps {
   laps: number[];
   height?: number;
   onClear: () => void;
+  /**
+   * Optional handler to save the current run. When provided, a
+   * "Save run" button is rendered alongside "Clear laps".
+   */
+  onSave?: () => void;
 }
 
-export default function LapList({ laps, height = 280, onClear }: LapListProps) {
+export default function LapList({
+  laps,
+  height = 280,
+  onClear,
+  onSave,
+}: LapListProps) {
   const theme = useTheme();
 
   if (laps.length === 0) return;
@@ -30,25 +41,8 @@ export default function LapList({ laps, height = 280, onClear }: LapListProps) {
     <View style={{ height: height, minWidth: 250 }}>
       {laps.length > 0 && (
         <>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              gap: 20,
-              alignItems: "center",
-              paddingVertical: 10,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.outlineVariant,
-            }}
-          >
-            <Text style={{ fontFamily: "ChivoMono", fontSize: 16 }}>Lap</Text>
-            <Text style={{ fontFamily: "ChivoMono", fontSize: 16 }}>Split</Text>
-            <Text
-              style={{ fontFamily: "ChivoMono", fontSize: 16, opacity: 0.7 }}
-            >
-              total time
-            </Text>
-          </View>
+          <LapListHeader />
+
           <ScrollView showsVerticalScrollIndicator={false}>
             {[...laps].reverse().map((totalMs, i) => {
               const lapNum = laps.length - i;
@@ -65,7 +59,22 @@ export default function LapList({ laps, height = 280, onClear }: LapListProps) {
               );
             })}
           </ScrollView>
-          <Button onPress={onClear}>Clear laps</Button>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {onSave && (
+              <Button icon="save-outline" onPress={onSave}>
+                Save run
+              </Button>
+            )}
+            <Button icon="trash-outline" onPress={onClear}>
+              Clear laps
+            </Button>
+          </View>
         </>
       )}
     </View>

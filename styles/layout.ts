@@ -98,7 +98,6 @@ export const layout = StyleSheet.create({
   // text styling
 
   helperText: {
-    marginTop: 10,
     opacity: 0.5,
     fontSize: 12,
     textAlign: "center",

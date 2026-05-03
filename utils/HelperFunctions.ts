@@ -11,11 +11,15 @@ export const formatDateTimer = (totalMills: number, showMills: boolean) => {
   const safeMs = Math.max(0, totalMills);
 
   const totalSeconds = Math.floor(safeMs / 1000); // floor, not ceil
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   const centiseconds = Math.floor((safeMs % 1000) / 10);
 
-  const main = `${pad(minutes, 2)}:${pad(seconds, 2)}`;
+  const main =
+    hours > 0
+      ? `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}`
+      : `${pad(minutes, 2)}:${pad(seconds, 2)}`;
   const ms = showMills ? `:${pad(centiseconds, 2)}` : "";
   return { main, ms };
 };

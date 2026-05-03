@@ -6,6 +6,7 @@ import {
   DeviceEventEmitter,
   Pressable,
 } from "react-native";
+import { OPEN_SETTINGS_EVENT } from "@/components/SettingsTrigger";
 import {
   useTheme,
   Button,
@@ -43,35 +44,53 @@ export default function IntervalScreen() {
 
   // --- State ---
   const [timer, setTimer] = useState(0);
+
+  const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(true);
   const [currentInterval, setCurrentInterval] =
     useState<IntervalName>("Active");
   const [editingId, setEditingId] = useState(1);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [snackbar, setSnackbar] = useState({
+  const [snackbar, setSnackbar] = useState<{
+    visible: boolean;
+    message: string;
+    isError: boolean;
+    action?: { label: string; onPress: () => void };
+    secondaryAction?: { label: string; onPress: () => void };
+  }>({
     visible: false,
     message: "",
     isError: false,
   });
-  const [repeatCount, setRepeatCount] = useState("1");
+  const [repeatCountInput, setRepeatCountInput] = useState("1");
   const [editingRepeat, setIsEditingRepeat] = useState(false);
+  const [currentRepeatPass, setCurrentRepeatPass] = useState(0);
+  const [currentTotalPass, setCurrentTotalPass] = useState(0);
 
   // --- Hooks ---
   const { preferences, updatePreference } = useUserPreferences();
   const { isPro } = useProStatus();
-  const { presets, savePreset, deletePreset } = useWorkoutPresets();
+  const { presets, savePreset, canSavePreset, deletePreset } =
+    useWorkoutPresets();
   const progress = useSharedValue(0);
   const counterRef = useRef(0);
 
   const intervals = preferences.interval.segments;
+  const storedRepeatCount = preferences.interval.repeatCount ?? 1;
+
+  useEffect(() => {
+    if (!editingRepeat) {
+      setRepeatCountInput(storedRepeatCount.toString());
+    }
+  }, [storedRepeatCount, editingRepeat]);
   // The first active interval's duration, in ms
   const firstActive = intervals.find((i) => i.durationSecs > 0);
   const firstIntervalMs = firstActive
     ? convertToMs(firstActive.durationSecs, firstActive.unit)
     : 0;
 
-  const { main } = formatDateTimer(timer > 0 ? timer : firstIntervalMs, false);
+  const { main } = formatDateTimer(isRunning ? timer : firstIntervalMs, false);
   const intervalPresets = presets.filter((p) => p.type === "interval");
   const selectedInterval =
     intervals.find((i) => i.id === editingId) || intervals[0];
@@ -112,12 +131,49 @@ export default function IntervalScreen() {
   const currentStatus = getStatus();
 
   // --- Snackbar ---
-  const showSnackbar = (message: string, isError = false) =>
-    setSnackbar({ visible: true, message, isError });
+  const showSnackbar = (
+    message: string,
+    isError = false,
+    action?: { label: string; onPress: () => void },
+    secondaryAction?: { label: string; onPress: () => void },
+  ) =>
+    setSnackbar({ visible: true, message, isError, action, secondaryAction });
 
   // --- Interval helpers ---
   const setIntervals = (updater: (prev: Interval[]) => Interval[]) =>
-    updatePreference("interval", { segments: updater(intervals) });
+    updatePreference("interval", {
+      ...preferences.interval,
+      segments: updater(intervals),
+    });
+
+  const commitRepeatCount = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, "");
+    const parsed = parseInt(cleaned, 10);
+    const num = isNaN(parsed) || parsed < 1 ? 1 : parsed;
+    setRepeatCountInput(num.toString());
+    if (num !== storedRepeatCount) {
+      updatePreference("interval", {
+        ...preferences.interval,
+        repeatCount: num,
+      });
+    }
+  };
+
+  const handleRepeatChange = (text: string) => {
+    const cleaned = text.replace(/[^0-9]/g, "");
+    setRepeatCountInput(cleaned);
+    // Write through to prefs whenever we have a valid >=1 value;
+    // empty string is allowed mid-edit and is normalised on blur.
+    if (cleaned !== "") {
+      const num = Math.max(1, parseInt(cleaned, 10) || 1);
+      if (num !== storedRepeatCount) {
+        updatePreference("interval", {
+          ...preferences.interval,
+          repeatCount: num,
+        });
+      }
+    }
+  };
 
   // --- Timer controls ---
   const startInterval = () => {
@@ -127,9 +183,14 @@ export default function IntervalScreen() {
       return;
     }
     try {
+      setIsRunning(true);
       setIsPaused(false);
       setTimer(0);
       counterRef.current = 0;
+      const repeatCountNum = Math.max(
+        1,
+        parseInt(repeatCountInput, 10) || storedRepeatCount,
+      );
       IntervalServiceModule.startSequence(
         JSON.stringify(
           activeIntervals.map((i) => ({
@@ -140,8 +201,11 @@ export default function IntervalScreen() {
         true,
         "interval",
         isPro && preferences.voicePromptsEnabled,
+        repeatCountNum,
       );
     } catch (e) {
+      // Roll back the optimistic isRunning flip if the native call threw.
+      setIsRunning(false);
       showSnackbar("Failed to start timer, please try again", true);
     }
   };
@@ -173,17 +237,46 @@ export default function IntervalScreen() {
   };
 
   // --- Presets ---
+  const handleSavePresetClick = () => {
+    if (!canSavePreset("interval", isPro)) {
+      // Free-tier limit hit — surface the upsell snackbar with two
+      // routes out: jump to the Pro section, or open the existing
+      // presets list to delete one and make room.
+      showSnackbar(
+        "Free plan: 3 presets per timer. Upgrade for unlimited.",
+        false,
+        {
+          label: "Upgrade",
+          onPress: () => DeviceEventEmitter.emit(OPEN_SETTINGS_EVENT),
+        },
+        {
+          label: "Manage",
+          onPress: () => setIsPresetsOpen(true),
+        },
+      );
+      return;
+    }
+    setShowSaveDialog(true);
+  };
+
   const handleSavePreset = async (name: string) => {
-    await savePreset(name, "interval", {
-      segments: preferences.interval.segments,
-    });
+    const result = await savePreset(
+      name,
+      "interval",
+      {
+        segments: preferences.interval.segments,
+        repeatCount: preferences.interval.repeatCount,
+      },
+      isPro,
+    );
+    if (!result.ok) {
+      showSnackbar("Couldn't save preset — Pro limit reached.", true);
+      return;
+    }
     showSnackbar("Preset saved!");
   };
 
   const openPresets = () => {
-    const p = presets.find((p) => p.name === "Morning hiit");
-    console.log(JSON.stringify(p?.config.segments, null, 2));
-
     if (intervalPresets.length < 1) {
       showSnackbar("You don't have any saved presets", true);
     } else {
@@ -207,6 +300,7 @@ export default function IntervalScreen() {
           timerType: string;
         }) => {
           if (state.timerType !== "interval" || !state.isRunning) return;
+          setIsRunning(true);
           setIsPaused(state.isPaused);
         },
       )
@@ -218,6 +312,8 @@ export default function IntervalScreen() {
       intervalName: IntervalName;
       remainingMs: number;
       timerType: string;
+      currentPass: number;
+      totalPasses: number;
     }
 
     const subUpdate = DeviceEventEmitter.addListener(
@@ -226,6 +322,8 @@ export default function IntervalScreen() {
         if (data.timerType !== "interval") return;
         setCurrentInterval(data.intervalName);
         setTimer(data.remainingMs);
+        setCurrentRepeatPass(data.currentPass);
+        setCurrentTotalPass(data.totalPasses);
         const idx = intervals.findIndex((i) => i.name === data.intervalName);
         if (idx !== -1) {
           const interval = intervals[idx];
@@ -253,6 +351,7 @@ export default function IntervalScreen() {
       "IntervalStopped",
       (data) => {
         if (data?.timerType !== "interval") return;
+        setIsRunning(false);
         setIsPaused(true);
         setTimer(0);
         counterRef.current = 0;
@@ -277,198 +376,195 @@ export default function IntervalScreen() {
             statusColor={currentStatus.color}
             statusIcon={currentStatus.icon}
           />
-          {timer === 0 && (
+          {!isRunning && (
             <TimerInfoBar
               type="interval"
               segments={intervals}
               currentInterval={currentInterval}
-              isRunning={!!timer}
+              isRunning={isRunning}
+              repeatCount={preferences.interval.repeatCount}
             />
           )}
           <View style={styles.mainArea}>
-            {timer > 0 ? (
+            {isRunning ? (
               <View style={{ flexDirection: "column", alignItems: "center" }}>
                 <TimerDisplay
                   time={main}
                   isPaused={isPaused}
-                  isRunning={!!timer}
+                  isRunning={isRunning}
                 />
-                <TimerInfoBar
-                  type="interval"
-                  segments={intervals}
-                  currentInterval={currentInterval}
-                  isRunning={!!timer}
-                />
+                <Text variant="labelMedium">
+                  Set {currentRepeatPass}/{currentTotalPass}
+                </Text>
               </View>
             ) : (
               <View style={{ width: "100%", alignItems: "center" }}>
-                <SegmentedButtons
-                  value={editingId.toString()}
-                  onValueChange={(val) => setEditingId(parseInt(val))}
-                  buttons={intervals.map((i) => {
-                    const isSelected = editingId === i.id;
-                    const isActive = i.durationSecs > 0;
-
-                    const bgColor = isSelected
-                      ? isActive
-                        ? theme.colors.primary
-                        : theme.colors.primaryContainer
-                      : isActive
-                        ? theme.colors.secondary
-                        : theme.colors.surfaceDisabled;
-
-                    const textColor = isSelected
-                      ? isActive
-                        ? theme.colors.onPrimary
-                        : theme.colors.onPrimaryContainer
-                      : isActive
-                        ? theme.colors.onSecondary
-                        : theme.colors.onSurfaceDisabled;
-
-                    return {
-                      value: i.id.toString(),
-                      label: i.durationSecs === 0 ? `${i.name} (off)` : i.name,
-                      checkedColor: textColor,
-                      uncheckedColor: textColor,
-                      style: {
-                        borderColor: isSelected
-                          ? theme.colors.primary
-                          : theme.colors.outlineVariant,
-                        borderWidth: isSelected ? 2 : 1,
-                        backgroundColor: bgColor,
-                        opacity: i.durationSecs > 0 ? 1 : 0.8,
-                        paddingHorizontal: 0,
-                      },
-                      labelStyle: {
-                        fontWeight: isSelected ? "900" : "600",
-                        fontSize: 12,
-                        color: textColor,
-                      },
-                    };
-                  })}
-                  style={{ width: "100%", marginBottom: 20 }}
-                />
-
                 <View
                   style={{
                     width: "100%",
                     position: "relative",
+                    gap: 40,
                   }}
                 >
                   <View
                     style={{
-                      opacity: selectedInterval.durationSecs > 0 ? 1 : 0.4,
                       flexDirection: "column",
                       alignItems: "center",
                     }}
                   >
-                    <TimeWheelPicker
-                      valueInSeconds={selectedInterval.durationSecs}
-                      onChange={(newSeconds) =>
-                        setIntervals((prev) =>
-                          prev.map((i) =>
-                            i.id === selectedInterval.id
-                              ? { ...i, durationSecs: newSeconds }
-                              : i,
-                          ),
-                        )
-                      }
-                    />
-                  </View>
+                    <View
+                      style={{
+                        opacity: selectedInterval.durationSecs > 0 ? 1 : 0.4,
+                      }}
+                    >
+                      <TimeWheelPicker
+                        valueInSeconds={selectedInterval.durationSecs}
+                        onChange={(newSeconds) =>
+                          setIntervals((prev) =>
+                            prev.map((i) =>
+                              i.id === selectedInterval.id
+                                ? { ...i, durationSecs: newSeconds }
+                                : i,
+                            ),
+                          )
+                        }
+                      />
+                      <Text variant="labelSmall" style={[layout.helperText]}>
+                        Scroll to 0 to disable interval
+                      </Text>
+                    </View>
 
-                  {selectedInterval.durationSecs > 0 ? (
-                    <Button
-                      textColor={theme.colors.secondary}
-                      mode="outlined"
-                      onPress={() =>
-                        setIntervals((prev) =>
-                          prev.map((i) =>
-                            i.id === selectedInterval.id
-                              ? { ...i, durationSecs: 0 }
-                              : i,
-                          ),
-                        )
-                      }
-                      style={{
-                        width: 160,
-                        padding: 0,
-                        alignSelf: "center",
-                        marginTop: 10,
-                      }}
-                      labelStyle={{
-                        fontSize: 12,
-                        lineHeight: 12,
-                        color: theme.colors.secondary,
-                      }}
-                    >
-                      Disable {selectedInterval.name} timer
-                    </Button>
-                  ) : (
-                    <Pressable
-                      onPress={() =>
-                        setIntervals((prev) =>
-                          prev.map((i) =>
-                            i.id === selectedInterval.id
-                              ? { ...i, durationSecs: 30 }
-                              : i,
-                          ),
-                        )
-                      }
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: "50%",
-                        transform: [{ translateY: -20 }],
-                        height: 40,
-                        backgroundColor: theme.colors.secondary,
-                        borderRadius: 8,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text
+                    {selectedInterval.durationSecs === 0 && (
+                      <Pressable
+                        onPress={() =>
+                          setIntervals((prev) =>
+                            prev.map((i) =>
+                              i.id === selectedInterval.id
+                                ? { ...i, durationSecs: 30 }
+                                : i,
+                            ),
+                          )
+                        }
                         style={{
-                          color: theme.colors.onSecondary,
-                          fontSize: 12,
-                          opacity: 1,
+                          position: "absolute",
+                          left: 50,
+                          right: 50,
+                          top: "52%",
+                          transform: [{ translateY: -20 }],
+                          height: 40,
+                          backgroundColor: theme.colors.background,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: theme.colors.onBackground,
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
-                        Tap here to enable {selectedInterval.name} timer
-                      </Text>
-                    </Pressable>
-                  )}
+                        <Text
+                          style={{
+                            color: theme.colors.onBackground,
+                            fontSize: 12,
+                            opacity: 1,
+                          }}
+                        >
+                          Disabled (tap to activate)
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  <View
+                    style={{
+                      width: "100%",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      variant="labelSmall"
+                      style={[layout.helperText, { marginBottom: 0 }]}
+                    >
+                      Choose each interval and set time for each above.
+                    </Text>
+                    <SegmentedButtons
+                      value={editingId.toString()}
+                      onValueChange={(val) => setEditingId(parseInt(val))}
+                      buttons={intervals.map((i) => {
+                        const isSelected = editingId === i.id;
+                        const isActive = i.durationSecs > 0;
+
+                        const bgColor = isSelected
+                          ? isActive
+                            ? theme.colors.primary
+                            : theme.colors.primaryContainer
+                          : isActive
+                            ? theme.colors.secondary
+                            : theme.colors.surfaceDisabled;
+
+                        const textColor = isSelected
+                          ? isActive
+                            ? theme.colors.onPrimary
+                            : theme.colors.onPrimaryContainer
+                          : isActive
+                            ? theme.colors.onSecondary
+                            : theme.colors.onSurfaceDisabled;
+
+                        return {
+                          value: i.id.toString(),
+                          label:
+                            i.durationSecs === 0 ? `${i.name} (off)` : i.name,
+                          checkedColor: textColor,
+                          uncheckedColor: textColor,
+                          style: {
+                            borderColor: isSelected
+                              ? theme.colors.primary
+                              : theme.colors.outlineVariant,
+                            borderWidth: isSelected ? 2 : 1,
+                            backgroundColor: bgColor,
+                            opacity: i.durationSecs > 0 ? 1 : 0.8,
+                            paddingHorizontal: 0,
+                          },
+                          labelStyle: {
+                            fontWeight: isSelected ? "900" : "600",
+                            fontSize: 12,
+                            color: textColor,
+                          },
+                        };
+                      })}
+                      style={{ width: "100%" }}
+                    />
+                  </View>
+                  <View style={{ alignItems: "center" }}>
+                    <Text variant="bodySmall" style={{ marginBottom: 5 }}>
+                      Sets:
+                    </Text>
+                    <TextInput
+                      mode="outlined"
+                      value={repeatCountInput}
+                      onChangeText={handleRepeatChange}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                      selectTextOnFocus
+                      onBlur={() => {
+                        commitRepeatCount(repeatCountInput);
+                        setIsEditingRepeat(false);
+                      }}
+                      onFocus={() => {
+                        setIsEditingRepeat(true);
+                      }}
+                      style={{
+                        width: 75,
+                        height: 40,
+                        textAlign: "center",
+                      }}
+                    />
+                  </View>
                 </View>
-                <Text
-                  variant="labelMedium"
-                  style={{ marginBottom: 5, marginTop: 10 }}
-                >
-                  Set repeats:
-                </Text>
-                <TextInput
-                  mode="outlined"
-                  value={repeatCount}
-                  onChangeText={(text) =>
-                    setRepeatCount(text.replace(/[^0-9]/g, ""))
-                  }
-                  keyboardType="number-pad"
-                  maxLength={3}
-                  onBlur={() => setIsEditingRepeat(false)}
-                  onFocus={() => {
-                    setIsEditingRepeat(true);
-                  }}
-                  style={{ width: 75, height: 40, textAlign: "center" }}
-                />
               </View>
             )}
           </View>
 
-          {timer === 0 && (
+          {!isRunning && (
             <View style={styles.presetRow}>
-              <Button
-                icon="save-outline"
-                onPress={() => setShowSaveDialog(true)}
-              >
+              <Button icon="save-outline" onPress={handleSavePresetClick}>
                 Save for later
               </Button>
               <Button icon="bookmarks-outline" onPress={openPresets}>
@@ -478,7 +574,7 @@ export default function IntervalScreen() {
           )}
 
           <ActionButtonsRow
-            timerActive={!!timer}
+            timerActive={isRunning}
             isPaused={isPaused}
             pressPlay={startInterval}
             pressPause={togglePause}
@@ -494,10 +590,11 @@ export default function IntervalScreen() {
             visible={snackbar.visible}
             message={snackbar.message}
             onDismiss={() => setSnackbar((s) => ({ ...s, visible: false }))}
-            color={snackbar.isError ? theme.colors.error : theme.colors.primary}
-            textColor={
-              snackbar.isError ? theme.colors.onError : theme.colors.onPrimary
-            }
+            color={snackbar.isError ? theme.colors.error : undefined}
+            textColor={snackbar.isError ? theme.colors.onError : undefined}
+            action={snackbar.action}
+            secondaryAction={snackbar.secondaryAction}
+            duration={snackbar.action || snackbar.secondaryAction ? 5000 : 2000}
           />
         </View>
       </View>
@@ -526,8 +623,10 @@ export default function IntervalScreen() {
                 onLoad={(preset) => {
                   updatePreference("interval", {
                     segments: preset.config.segments ?? [],
+                    repeatCount: preset.config.repeatCount ?? 1,
                   });
                   showSnackbar("Preset loaded!");
+                  setIsPresetsOpen(false);
                 }}
                 onDelete={(id) => {
                   handleDeletePreset(id);

@@ -3,20 +3,10 @@ import { Tabs } from "expo-router";
 import { View } from "react-native";
 import { useTheme } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
-import * as Notifications from "expo-notifications";
 import SettingsTrigger from "@/components/SettingsTrigger";
 
 export default function MainLayout() {
   const theme = useTheme();
-
-  React.useEffect(() => {
-    Notifications.setNotificationChannelAsync("alarm", {
-      name: "Alarm",
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: "bedside_alarm.mp3",
-      enableVibrate: true,
-    });
-  }, []);
 
   return (
     <View style={{ flex: 1 }}>

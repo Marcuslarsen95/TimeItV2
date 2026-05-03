@@ -11,6 +11,7 @@ export interface WorkoutPreset {
   config: {
     //intevals
     segments?: Interval[];
+    repeatCount?: number;
     //countdown timers
     duration?: number;
     // random
@@ -19,7 +20,15 @@ export interface WorkoutPreset {
   };
 }
 
+export type SavePresetResult =
+  | { ok: true }
+  | { ok: false; reason: "limit" };
+
 const PRESETS_KEY = "workoutPresets";
+
+// Free users can save at most this many presets per timer type.
+// Pro users have no limit.
+export const FREE_PRESET_LIMIT_PER_TYPE = 3;
 
 export function useWorkoutPresets() {
   const [presets, setPresets] = useState<WorkoutPreset[]>([]);
@@ -39,11 +48,24 @@ export function useWorkoutPresets() {
     load();
   }, []);
 
+  const canSavePreset = (
+    type: WorkoutPreset["type"],
+    isPro: boolean,
+  ): boolean => {
+    if (isPro) return true;
+    const countForType = presets.filter((p) => p.type === type).length;
+    return countForType < FREE_PRESET_LIMIT_PER_TYPE;
+  };
+
   const savePreset = async (
     name: string,
     type: WorkoutPreset["type"],
     config: WorkoutPreset["config"],
-  ) => {
+    isPro: boolean = true,
+  ): Promise<SavePresetResult> => {
+    if (!canSavePreset(type, isPro)) {
+      return { ok: false, reason: "limit" };
+    }
     const newPreset: WorkoutPreset = {
       id: Date.now().toString(),
       name,
@@ -53,6 +75,7 @@ export function useWorkoutPresets() {
     const updated = [...presets, newPreset];
     setPresets(updated);
     await AsyncStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
+    return { ok: true };
   };
 
   const updatePreset = async (
@@ -72,5 +95,12 @@ export function useWorkoutPresets() {
     await AsyncStorage.setItem(PRESETS_KEY, JSON.stringify(updated));
   };
 
-  return { presets, savePreset, updatePreset, deletePreset, isLoading };
+  return {
+    presets,
+    savePreset,
+    canSavePreset,
+    updatePreset,
+    deletePreset,
+    isLoading,
+  };
 }

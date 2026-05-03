@@ -39,15 +39,29 @@ export default function PresetList({ presets, onLoad, onDelete, type }: Props) {
             <Text style={{ color: theme.colors.secondary, fontWeight: "600" }}>
               {preset.name}
             </Text>
-            <Text
-              variant="labelSmall"
-              style={{
-                color: theme.colors.onSurface,
-                opacity: 0.7,
-              }}
-            >
-              {summarizePreset(preset)}
-            </Text>
+            <View style={{ flexDirection: "row" }}>
+              <Text
+                variant="labelSmall"
+                style={{
+                  color: theme.colors.onSurface,
+                  opacity: 0.7,
+                  flex: 1,
+                }}
+              >
+                {summarizePreset(preset)}
+              </Text>
+              {type === "interval" && (
+                <Text
+                  variant="labelSmall"
+                  style={{
+                    color: theme.colors.onSurface,
+                    opacity: 0.7,
+                  }}
+                >
+                  ({preset.config.repeatCount})
+                </Text>
+              )}
+            </View>
           </View>
           <View style={styles.actions}>
             <Pressable
@@ -85,6 +99,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     gap: 8,
+    marginLeft: 10,
   },
   iconButton: {
     padding: 4,

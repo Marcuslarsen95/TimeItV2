@@ -29,13 +29,18 @@ const Wheel = memo(({ values, selectedIndex, onChange }: WheelProps) => {
   const [localIndex, setLocalIndex] = useState(selectedIndex);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  // Skip animation on the first sync so the FlatList settles silently
+  // at its initial position. Subsequent prop changes (e.g. preset loads)
+  // still animate so the user sees the wheel move.
+  const isFirstSync = useRef(true);
 
   useEffect(() => {
     setLocalIndex(selectedIndex);
     flatListRef.current?.scrollToIndex({
       index: selectedIndex,
-      animated: true,
+      animated: !isFirstSync.current,
     });
+    isFirstSync.current = false;
   }, [selectedIndex]);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -245,6 +250,19 @@ export default function TimeWheelPicker({
     valueInSecondsRef.current = valueInSeconds;
   }, [valueInSeconds]);
 
+  // Hide the wheels visually for the first couple of frames so the user
+  // doesn't see the FlatLists snap from index 0 to selectedIndex on mount
+  // (especially noticeable on initial app open and tab switches). Two
+  // requestAnimationFrame ticks gives layout + initial scroll a chance to
+  // finish before the fade-in.
+  const [isReady, setIsReady] = useState(false);
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setIsReady(true));
+    });
+    return () => cancelAnimationFrame(handle);
+  }, []);
+
   const hours = Math.floor(valueInSeconds / 3600);
   const minutes = Math.floor((valueInSeconds % 3600) / 60);
   const seconds = valueInSeconds % 60;
@@ -291,7 +309,7 @@ export default function TimeWheelPicker({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { opacity: isReady ? 1 : 0 }]}>
       {label && <Text style={styles.header}>{label}</Text>}
       <View
         style={[

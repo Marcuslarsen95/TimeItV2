@@ -66,6 +66,13 @@ const TimerDisplay = ({
 
   const displayTime = isRandom ? randomtimerArray[randomIndex] : time;
 
+  // Detect hh:mm:ss vs mm:ss by colon count so we can shrink the font enough
+  // to fit the longer string on screen. Random patterns ("??:??") only ever
+  // have one colon, so they fall through to the larger size automatically.
+  const isHours = displayTime.split(":").length > 2;
+  const mainFontSize = isHours ? 64 : 96;
+  const mainLineHeight = isHours ? 76 : 110;
+
   return (
     <View
       style={{
@@ -85,11 +92,13 @@ const TimerDisplay = ({
         <View style={{ overflow: "visible" }}>
           <Text
             variant="displayLarge"
+            adjustsFontSizeToFit
+            numberOfLines={1}
             style={[
               timerTextStyle,
               {
-                fontSize: 96,
-                lineHeight: 110,
+                fontSize: mainFontSize,
+                lineHeight: mainLineHeight,
                 textAlign: "center",
                 paddingHorizontal: 6,
               },
